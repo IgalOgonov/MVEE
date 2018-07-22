@@ -14,6 +14,7 @@ namespace MVEE {
 		this->startingLoc = Point(0, 0);
 														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
 														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
+		this->p = new Point[4];
 	}
 
 	//Destructor
@@ -215,8 +216,41 @@ namespace MVEE {
 			}
 		//At this point, we are inside the shape
 		}
+
 		//Now, it's time to crawl along the border until we get to a point where any legal movement brings us closer to the starting point
 
+		//Get potential legal movement pixels
+		int* legalPixels = this->getAngleDirections;
+		//Choose the best direction to go, then go in that direction. Repeat until you reached a point where any movement makes you lose distance from the start
+		int dirToGo;		//This represents the direction to go in each round
+		int distFromStart;	//This represents the distance of the current point from the start
+		double maxDist;		//This will be the "farthest" possible pixel to go to
+		double tempDist;	//Temporary distance
+		bool keepGoing = true;
+		while (keepGoing) {
+			maxDist = 0;
+			dirToGo = 0;
+			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
+			//Check if there are legal pixels to go to, see if they are farthest, and decide to which to mive
+			for (int i = 1; i < 9; i++) {
+				if (legalPixels[i] != 0 && this->inShape[i]) {
+					tempDist = this->pointDist(this->getPointAt[i], this->startingLoc);
+					if (tempDist > distFromStart && tempDist > maxDist) {
+						maxDist = tempDist;
+						dirToGo = i;
+					}
+				}
+			}
+			//Move to the decided pixel.. 
+			if (dirToGo != 0) {
+				this->moveCurrent(dirToGo);
+			}
+			//..or stop and declare current position as the corner we seek
+			else {
+				this->p[num] = this->currLoc;
+				return true;
+			}
+		}
 	}
 
 	//Checks if the specified location is inside the shape (aka of the same color as current color)
@@ -296,12 +330,59 @@ namespace MVEE {
 			return true;
 	}
 
+	//Returns an array of size 9 where the i-th member is 1 if that direction can be in currentAngle's way, 0 otherwise. dirArr[0] is always 0.
+	int * imgCrawler::getAngleDirections()
+	{
+		int dirArr[9] = {};	
+		static double tempAngle;																		//Based on our angle we set members to 1 or 0
+		//Can't do a switch cause it's a double =(
+		if (tempAngle <= 180 && tempAngle >= 0)
+			dirArr[1] = 1;
+		if (tempAngle <= 135 && tempAngle >= -45)
+			dirArr[2] = 1;
+		if (tempAngle <= 90 && tempAngle >= -90)
+			dirArr[3] = 1;
+		if (tempAngle <= 45 && tempAngle >= -135)
+			dirArr[4] = 1;
+		if (tempAngle <= 0 || tempAngle == 180)
+			dirArr[5] = 1;
+		if (tempAngle <= -45 || tempAngle >= 135)
+			dirArr[6] = 1;
+		if (tempAngle <= -90 || tempAngle >= 90)
+			dirArr[7] = 1;
+		if (tempAngle <= -135 || tempAngle >= 45)
+			dirArr[8] = 1;
+		return dirArr;
+	}
 
+	//Gets data on angle. Can be converted to radians
 	double imgCrawler::getAngleData(bool convertToRad) {
 		double res = this->movementAngle;
 		if (convertToRad)
 			res = res * PI / 180;
 		return res;
+	}
+
+	//Expands our dynamic array P - trivial, all allocations/deletes delt with
+	void imgCrawler::expandP() {
+		int oldSize = this->pointArrSize;
+		int newSize = oldSize * 2;
+		Point* temp = new Point[oldSize];
+		for (int i = 0; i < oldSize; i++)
+			temp[i] = this->p[i];
+		delete[] this->p;
+		this->p = new Point[newSize];
+		for (int i = 0; i < oldSize; i++)
+			this->p[i] = temp[i];
+		delete[] temp;
+		this->pointArrSize = newSize;
+	}
+
+	//Euclidean distance between 2 points
+	float imgCrawler::pointDist(Point p1, Point p2)
+	{
+		cv::Point2f diff = p1 - p2;
+		return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
 	}
 
 	/*int* imgCrawler::getApproxArray() {

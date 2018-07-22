@@ -30,7 +30,10 @@ namespace MVEE {
 		Mat image;			//Image to crawl
 		Point startingLoc;	//Starting location
 		Point currLoc;		//Current location
-		Point p[4];
+		Point tempLoc;		//Temporary location
+		Point* p;			//Dynamic array of points
+		int pointArrSize;	//Just to make it easier to keep track of P's size
+		int pointArrCounter;//Keeps track of our current number of elements in p
 		int color;			//Current color
 		double movementAngle;		//The angle at which we are moving-normilized to the first quadrant (0-90).
 									/*int approxAngleLimit;	//The limit for the array length of the array apporximating the line in needed angle. --------- EDIT: Useless atm, but I'll keep it for possible future use ---------
@@ -58,7 +61,10 @@ namespace MVEE {
 		bool imgCrawler::moveCurrent(int whereTo);
 		Point imgCrawler::getPointAt(int whereTo = 0);
 		bool imgCrawler::checkPointLegal(Point p);
+		int* imgCrawler::getAngleDirections();
 		double getAngleData(bool convertToRad = true);
+		void imgCrawler::expandP();
+		float imgCrawler::pointDist(Point p1, Point p2);
 		/*int* getApproxArray();*/
 	};
 
