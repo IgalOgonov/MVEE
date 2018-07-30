@@ -65,6 +65,7 @@ namespace MVEE {
 		double getAngleData(bool convertToRad = true);
 		void imgCrawler::expandP();
 		float imgCrawler::pointDist(Point p1, Point p2);
+		void imgCrawler::printState();
 		/*int* getApproxArray();*/
 	};
 

@@ -41,6 +41,8 @@ int main(int argc, char** argv)
 		}
 		cout << endl;
 	}
+	imgCrwl.run(0, 3, 10);
+	imgCrwl.printState();
 
 	namedWindow("Display window", WINDOW_NORMAL); // Create a window for display.
 	imshow("Display window", image); // Show our image inside it.

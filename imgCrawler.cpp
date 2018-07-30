@@ -74,7 +74,7 @@ namespace MVEE {
 	bool imgCrawler::run(int color, int eps1, int eps2, int x, int y) {
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
 			return false;
-	cv:Point left(this->startingLoc.x - 1, this->startingLoc.y);
+		cv::Point left(this->startingLoc.x - 1, this->startingLoc.y);
 		this->setAngle(this->startingLoc, left);						//Set movement to the left to find the first point
 		if (!this->findCorner(0))										//Try to find the first point
 			return false;
@@ -166,6 +166,7 @@ namespace MVEE {
 
 	//Finds the num-th corner of the shape, and put that point into p[num]
 	bool imgCrawler::findCorner(int num) {
+		std::cout << "Finding corner " << num << std::endl;
 		int bhop = 1;								//This is how much we "hop" each time
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
@@ -174,7 +175,7 @@ namespace MVEE {
 		Point prev = Point(0,0);
 
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
-		while (this->inShape) {
+		while (this->inShape()) {
 			bhop *= 2;
 			prev.x = this->currLoc.x;
 			prev.y = this->currLoc.y;
@@ -187,7 +188,7 @@ namespace MVEE {
 			bhop /= 2;
 			prev.x = this->currLoc.x;
 			prev.y = this->currLoc.y;
-			if (this->inShape) {
+			if (this->inShape()) {
 				this->currLoc.x += (int)(bhop*dx);
 				this->currLoc.y += (int)(bhop*dy);
 			}
@@ -198,7 +199,7 @@ namespace MVEE {
 		}
 
 		//Because it is possible to end up just outside the border instead of inside, do a small correction
-		if (!this->inShape) {
+		if (!this->inShape()) {
 			this->currLoc.x -= (int)(dx);
 			this->currLoc.y -= (int)(dy);
 			//Now, we might still be 1 pixel outside the shape (becaus we rounded down!), so check if we are in and if not, go to a neighbour that's in
@@ -220,10 +221,10 @@ namespace MVEE {
 		//Now, it's time to crawl along the border until we get to a point where any legal movement brings us closer to the starting point
 
 		//Get potential legal movement pixels
-		int* legalPixels = this->getAngleDirections;
+		int* legalPixels = this->getAngleDirections();
 		//Choose the best direction to go, then go in that direction. Repeat until you reached a point where any movement makes you lose distance from the start
 		int dirToGo;		//This represents the direction to go in each round
-		int distFromStart;	//This represents the distance of the current point from the start
+		float distFromStart;	//This represents the distance of the current point from the start
 		double maxDist;		//This will be the "farthest" possible pixel to go to
 		double tempDist;	//Temporary distance
 		bool keepGoing = true;
@@ -233,8 +234,8 @@ namespace MVEE {
 			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
 			//Check if there are legal pixels to go to, see if they are farthest, and decide to which to mive
 			for (int i = 1; i < 9; i++) {
-				if (legalPixels[i] != 0 && this->inShape[i]) {
-					tempDist = this->pointDist(this->getPointAt[i], this->startingLoc);
+				if (legalPixels[i] != 0 && this->inShape(i)) {
+					tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
 					if (tempDist > distFromStart && tempDist > maxDist) {
 						maxDist = tempDist;
 						dirToGo = i;
@@ -291,31 +292,31 @@ namespace MVEE {
 		Point pos = Point(0, 0);
 		switch (whereTo) {
 		case POS_N:
-			Point pos = Point(this->currLoc.x, this->currLoc.y + 1);
+			 pos = Point(this->currLoc.x, this->currLoc.y + 1);
 			break;
 		case POS_NE:
-			Point pos = Point(this->currLoc.x + 1, this->currLoc.y + 1);
+			 pos = Point(this->currLoc.x + 1, this->currLoc.y + 1);
 			break;
 		case POS_E:
-			Point pos = Point(this->currLoc.x + 1, this->currLoc.y);
+			 pos = Point(this->currLoc.x + 1, this->currLoc.y);
 			break;
 		case POS_SE:
-			Point pos = Point(this->currLoc.x + 1, this->currLoc.y - 1);
+			 pos = Point(this->currLoc.x + 1, this->currLoc.y - 1);
 			break;
 		case POS_S:
-			Point pos = Point(this->currLoc.x, this->currLoc.y - 1);
+			 pos = Point(this->currLoc.x, this->currLoc.y - 1);
 			break;
 		case POS_SW:
-			Point pos = Point(this->currLoc.x - 1, this->currLoc.y - 1);
+			 pos = Point(this->currLoc.x - 1, this->currLoc.y - 1);
 			break;
 		case POS_W:
-			Point pos = Point(this->currLoc.x - 1, this->currLoc.y);
+			 pos = Point(this->currLoc.x - 1, this->currLoc.y);
 			break;
 		case POS_NW:
-			Point pos = Point(this->currLoc.x - 1, this->currLoc.y + 1);
+			 pos = Point(this->currLoc.x - 1, this->currLoc.y + 1);
 			break;
 		default:
-			Point pos = Point(this->currLoc.x, this->currLoc.y);
+			 pos = Point(this->currLoc.x, this->currLoc.y);
 		}
 		return pos;
 	}
@@ -383,6 +384,20 @@ namespace MVEE {
 	{
 		cv::Point2f diff = p1 - p2;
 		return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
+	}
+
+	void imgCrawler::printState() {
+		std::cout << "Starting Location:" << this->startingLoc << std::endl;
+		std::cout << "Current Location:" << this->currLoc << std::endl;
+		std::cout << "Temp Location:" << this->tempLoc << std::endl;
+		std::cout << "Current Color:" << this->color << std::endl;
+		std::cout << "Movement Angle:" << this->movementAngle << std::endl;
+		std::cout << "Corner number:" << this->pointArrCounter << std::endl;
+		std::cout << "Corner array size:" << this->pointArrSize << std::endl;
+		for(int i = 0; i<this->pointArrSize; i++)
+			std::cout << "Point " << i << ": " << this->p[i] << std::endl;
+
+	
 	}
 
 	/*int* imgCrawler::getApproxArray() {
