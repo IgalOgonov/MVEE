@@ -32,6 +32,7 @@ namespace MVEE {
 		Point currLoc;		//Current location
 		Point tempLoc;		//Temporary location
 		Point* p;			//Dynamic array of points
+		bool debug;			//Debug mode active.
 		int pointArrSize;	//Just to make it easier to keep track of P's size
 		int pointArrCounter;//Keeps track of our current number of elements in p
 		int color;			//Current color
@@ -53,19 +54,20 @@ namespace MVEE {
 		imgCrawler::imgCrawler();
 		imgCrawler::imgCrawler(Mat image);/*, int approxAngleLimit)*/
 		imgCrawler::~imgCrawler();
-		void imgCrawler::setAngle(Point from, Point to);
-		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);
-		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);
-		bool imgCrawler::findCorner(int num);
-		bool imgCrawler::inShape(int where = 0);
-		bool imgCrawler::moveCurrent(int whereTo);
-		Point imgCrawler::getPointAt(int whereTo = 0);
-		bool imgCrawler::checkPointLegal(Point p);
-		int* imgCrawler::getAngleDirections();
-		double getAngleData(bool convertToRad = true);
-		void imgCrawler::expandP();
-		float imgCrawler::pointDist(Point p1, Point p2);
-		void imgCrawler::printState();
+		void imgCrawler::setAngle(Point from, Point to);							//Sets movement angle
+		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
+		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
+		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
+		bool imgCrawler::inShape(int where = 0);									//Returns true if pointAt(where) is insiide the shape
+		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo
+		Point imgCrawler::getPointAt(int whereTo = 0);								//Gets the point relative to current location
+		bool imgCrawler::checkPointLegal(Point p);									//Checks if a point is within matrix boundries
+		int* imgCrawler::getAngleDirections();										//Helper function that returns an array of legal directions depending on the current angle
+		double getAngleData(bool convertToRad = true);								//Helper function that returns current angle - converts it to radians by defult.
+		void imgCrawler::expandP();													//Expands dynamic array P
+		float imgCrawler::pointDist(Point p1, Point p2);							//Returns distance between points.
+		void imgCrawler::printState();												//Prints current state of the crawler.
+		void imgCrawler::setDebug(bool val);										//Sets the crawler into debug mode.
 		/*int* getApproxArray();*/
 	};
 

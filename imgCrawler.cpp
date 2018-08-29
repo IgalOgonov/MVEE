@@ -12,9 +12,11 @@ namespace MVEE {
 	{
 		this->image = image;							//Initialize image
 		this->startingLoc = Point(0, 0);
+		this->pointArrSize = 4;
+		this->pointArrCounter = 0;
 														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
 														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
-		this->p = new Point[4];
+		this->p = new Point[this->pointArrSize];
 	}
 
 	//Destructor
@@ -166,7 +168,8 @@ namespace MVEE {
 
 	//Finds the num-th corner of the shape, and put that point into p[num]
 	bool imgCrawler::findCorner(int num) {
-		std::cout << "Finding corner " << num << std::endl;
+		if (this->debug)//DEBUG
+			std::cout << "Finding corner " << num << std::endl;	
 		int bhop = 1;								//This is how much we "hop" each time
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
@@ -249,6 +252,11 @@ namespace MVEE {
 			//..or stop and declare current position as the corner we seek
 			else {
 				this->p[num] = this->currLoc;
+				this->pointArrCounter++;
+				if ((this->pointArrCounter + 1) == this->pointArrSize)
+					this->expandP();
+				if(this->debug)//DEBUG
+					std::cout << "Current location " << this->currLoc << ", Point: " << this->p[num] << std::endl;						
 				return true;
 			}
 		}
@@ -398,6 +406,11 @@ namespace MVEE {
 			std::cout << "Point " << i << ": " << this->p[i] << std::endl;
 
 	
+	}
+
+	void imgCrawler::setDebug(bool val)
+	{
+		this->debug = val;
 	}
 
 	/*int* imgCrawler::getApproxArray() {

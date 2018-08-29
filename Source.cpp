@@ -41,6 +41,8 @@ int main(int argc, char** argv)
 		}
 		cout << endl;
 	}
+	imgCrwl.findStartPoint(0, 3);
+	imgCrwl.printState();
 	imgCrwl.run(0, 3, 10);
 	imgCrwl.printState();
 
