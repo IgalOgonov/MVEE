@@ -36,13 +36,14 @@ namespace MVEE {
 		double y2 = to.y;
 
 		//Then, calculate the angle normalized to the first quadrant
-		double dx = x1 - x2;
-		double dy = y1 - y2;
+		double dx = x2 - x1;
+		double dy = y2 - y1;
 		//Calculate angle
 		if (dy != 0 && dx !=0 ) {
-			this->movementAngle = atan(dx / dy) * 180 / PI;
-			if (dx < 0)							//Same for if dy<0 and dy>0. If dx>0 and dy<0 then atan gives the correct resault anyway
-				this->movementAngle += 180;
+			this->movementAngle = atan(dy / dx) * 180 / PI;
+			if (dx < 0) {						//Remember - angle is mirrored vertically due to image representation
+				this->movementAngle < 0 ? this->movementAngle = (180+this->movementAngle)*(-1): this->movementAngle = (180 - this->movementAngle);	//Correct the resaults depending on the quardrant
+			}
 		}
 		else if (dx == 0 && dy != 0) {
 			(dy < 0) ? this->movementAngle = -90 : this->movementAngle = 90;
@@ -77,10 +78,11 @@ namespace MVEE {
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
 			return false;
 		cv::Point left(this->startingLoc.x - 1, this->startingLoc.y);
+		cv::Point right(this->startingLoc.x + 1, this->startingLoc.y);
 		this->setAngle(this->startingLoc, left);						//Set movement to the left to find the first point
 		if (!this->findCorner(0))										//Try to find the first point
 			return false;
-		this->setAngle(this->p[0], this->startingLoc);					//Set the angle from the point we found to the starting point
+		this->setAngle(this->startingLoc, right);					//Set the angle from the point we found to the starting point
 		if (!this->findCorner(1))										//Try to find the 2nd point
 			return false;
 		this->setAngle(this->p[0], this->p[1]);							//Set the angle to be between the 2 points we found.
@@ -168,8 +170,13 @@ namespace MVEE {
 
 	//Finds the num-th corner of the shape, and put that point into p[num]
 	bool imgCrawler::findCorner(int num) {
-		if (this->debug)//DEBUG
-			std::cout << "Finding corner " << num << std::endl;	
+		bool res = false;							//Result to return
+		cv::Mat tempMat;							//Only exists for debugging purposes
+		if (this->debug) {							//DEBUG
+			std::cout << "Finding corner " << num << " at angle " <<this->getAngleData(false) << std::endl;
+			this->image.copyTo(tempMat);
+			tempMat.at<uchar>(this->startingLoc) = 255;
+		}
 		int bhop = 1;								//This is how much we "hop" each time
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
@@ -178,16 +185,24 @@ namespace MVEE {
 		Point prev = Point(0,0);
 
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
-		while (this->inShape()) {
+		while (this->inShape() && !this->checkBorderPoint(this->currLoc)) {
 			bhop *= 2;
 			prev.x = this->currLoc.x;
 			prev.y = this->currLoc.y;
 			this->currLoc.x += (int)(bhop*dx);
+			if (bhop*dx - int(bhop*dx) >0.00000001)	this->currLoc.x += 1; //Round up
 			this->currLoc.y += (int)(bhop*dy);
+			if (bhop*dy - int(bhop*dy) >0.00000001)	this->currLoc.y += 1; //Round up
+			if (this->debug) {						//DEBUG
+				tempMat.at<uchar>(this->currLoc) = 190;
+			}
 		}
 
 		//Once we leave the shape, return back in with jumps becoming x2 smaller each time
 		while (bhop > 1) {
+			//If we are at the border, we can exit - it will get fixed in the next step anyway.
+			if (this->checkBorderPoint(this->currLoc))
+				break;
 			bhop /= 2;
 			prev.x = this->currLoc.x;
 			prev.y = this->currLoc.y;
@@ -199,6 +214,9 @@ namespace MVEE {
 				this->currLoc.x -= (int)(bhop*dx);
 				this->currLoc.y -= (int)(bhop*dy);
 			}
+			if (this->debug) {						//DEBUG
+				tempMat.at<uchar>(this->currLoc) = 145;
+			}
 		}
 
 		//Because it is possible to end up just outside the border instead of inside, do a small correction
@@ -206,18 +224,42 @@ namespace MVEE {
 			this->currLoc.x -= (int)(dx);
 			this->currLoc.y -= (int)(dy);
 			//Now, we might still be 1 pixel outside the shape (becaus we rounded down!), so check if we are in and if not, go to a neighbour that's in
-			if (!this->inShape()) {
+			bool tempTry = !this->inShape();
+			while (tempTry) {
 				//Check neighbouring pixels, and go to the one that's in the shape and break
 				for (int i = 1; i < 9; i++) {
 					if (this->inShape(i)) {
 						this->moveCurrent(i);
+						tempTry = false;
 						break;
 					}
 				}
-				//This means some problem occured
-				if (!this->inShape())
-					return false;
+				//It's possible that we are 2 pixels away due to rounding - then, just go to the nearest border pixel
+				if(tempTry)
+					for (int i = 1; i < 9; i++) {
+						if (this->checkBorderPoint(this->getPointAt(i))) {
+							this->moveCurrent(i);
+						}
+						else {
+							tempTry = false;
+						}
+					}
 			}
+		//This means some problem occured
+		if (!this->inShape()) {
+			if (this->debug) {
+				std::cout<< "Unexpected error - could not find near pixel in shape. At pixel "<< this->currLoc << std::endl;
+				String wName = "Corner_" + std::to_string(num) + "_debug";
+				cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+				imshow(wName, tempMat); // Show our image inside it.
+				waitKey(0); // Wait for a keystroke in the window
+			}
+			return res;
+		}
+
+		if (this->debug) {						//DEBUG
+			tempMat.at<uchar>(this->currLoc) = 145;
+		}
 		//At this point, we are inside the shape
 		}
 
@@ -225,19 +267,107 @@ namespace MVEE {
 
 		//Get potential legal movement pixels
 		int* legalPixels = this->getAngleDirections();
+		if (this->debug) {						//DEBUG
+			String tempStr = "";
+			for (int i = 0; i < 9; i++)
+				tempStr += std::to_string(legalPixels[i]) + " ";
+			std::cout<< "Legal directions are " << tempStr << std::endl;
+		}
 		//Choose the best direction to go, then go in that direction. Repeat until you reached a point where any movement makes you lose distance from the start
-		int dirToGo;		//This represents the direction to go in each round
-		float distFromStart;	//This represents the distance of the current point from the start
-		double maxDist;		//This will be the "farthest" possible pixel to go to
+		//Also, account for the fact there might be 2 possible directions, only one of them being a legal one.
+		int dirToGo = 0;		//This represents the direction to go in each round
+		int altDir = 0;			//This is the 2nd poissible direction
+		Point altStart = Point(-1,-1);		//Alternative point to start at
+		float distFromStart = this->pointDist(this->currLoc, this->startingLoc);	//This represents the distance of the current point from the start
+		double maxDist = 0;		//This will be the "farthest" possible pixel to go to
 		double tempDist;	//Temporary distance
+		Point tempLoc = Point(-1, -1);	//In case of 2 paths, we will save the first point we reached here to compare
 		bool keepGoing = true;
+
+		//Check if there are legal pixels to go to, see if they are farthest, and decide to which to move, but remember - here we might find an alternative location.
+		for (int i = 1; i < 9; i++) {
+			if ((legalPixels[i] != 0) && this->inShape(i) && this->checkBorderPoint(this->getPointAt(i))) {
+				tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
+				if (tempDist > distFromStart) {
+					if (tempDist > maxDist) { 
+						maxDist = tempDist; 
+						altDir = 0;
+						altStart = Point(-1, -1);
+						dirToGo = i;
+					}
+					else if (tempDist = maxDist) {
+						altDir = i;
+						altStart.x = this->currLoc.x;
+						altStart.y = this->currLoc.y;
+					}
+				}
+			}
+		}
+
+		//This is the main movement loop
 		while (keepGoing) {
+			//Move to the decided pixel.. 
+			if (dirToGo != 0) {
+				this->moveCurrent(dirToGo);
+				if (this->debug) {						//DEBUG
+					tempMat.at<uchar>(this->currLoc) = 100;
+				}
+			}
+			//..or stop and declare current position as the corner we seek - and potentially switch to the other potential path
+			else {
+				//This means we are done, and only went in one direction
+				if (altStart.x == -1 && altStart.y == -1) {
+					this->p[num] = this->currLoc;
+					this->pointArrCounter++;
+					if ((this->pointArrCounter + 1) == this->pointArrSize)
+						this->expandP();
+					if (this->debug) {						//DEBUG
+						String wName = "Corner_" + std::to_string(num) + "_debug";
+						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+						imshow(wName, tempMat); // Show our image inside it.
+						waitKey(0); // Wait for a keystroke in the window
+					}
+					keepGoing = false;
+					res = true;
+				}
+				//This means there was another direction
+				else {
+					//This means we finished the first direction, and need to check the 2nd.
+					if (tempLoc.x == -1 && tempLoc.y == -1) {
+						tempLoc.x = this->currLoc.x;
+						tempLoc.y = this->currLoc.y;
+						this->currLoc.x = altStart.x;
+						this->currLoc.y = altStart.y;
+						this->moveCurrent(altDir);
+					}
+					//This means we finished the 2nd direction - if the first point is farther than current location, swap them
+					else {
+						if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
+							this->currLoc.x = tempLoc.x;
+							this->currLoc.y = tempLoc.y;
+						}	
+						this->p[num] = this->currLoc;
+						this->pointArrCounter++;
+						if ((this->pointArrCounter + 1) == this->pointArrSize)
+							this->expandP();
+						if (this->debug) {						//DEBUG
+							String wName = "Corner_" + std::to_string(num) + "_debug";
+							cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+							imshow(wName, tempMat); // Show our image inside it.
+							waitKey(0); // Wait for a keystroke in the window
+						}
+						keepGoing = false;
+						res = true;
+					}
+				}
+			}
+
 			maxDist = 0;
 			dirToGo = 0;
 			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
 			//Check if there are legal pixels to go to, see if they are farthest, and decide to which to mive
 			for (int i = 1; i < 9; i++) {
-				if (legalPixels[i] != 0 && this->inShape(i)) {
+				if ( (legalPixels[i] != 0) && this->inShape(i) && this->checkBorderPoint(this->getPointAt(i)) ) {
 					tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
 					if (tempDist > distFromStart && tempDist > maxDist) {
 						maxDist = tempDist;
@@ -245,27 +375,25 @@ namespace MVEE {
 					}
 				}
 			}
-			//Move to the decided pixel.. 
-			if (dirToGo != 0) {
-				this->moveCurrent(dirToGo);
+			//If we are moving on our first path out of 2, moving diagonally means it must be the correct path
+			if (altStart.x != -1 || altStart.y != -1)
+			{
+				if (dirToGo == 2 || dirToGo == 4 || dirToGo == 6 || dirToGo == 8) {
+					altStart.x = -1;
+					altStart.y = -1;
+				}
 			}
-			//..or stop and declare current position as the corner we seek
-			else {
-				this->p[num] = this->currLoc;
-				this->pointArrCounter++;
-				if ((this->pointArrCounter + 1) == this->pointArrSize)
-					this->expandP();
-				if(this->debug)//DEBUG
-					std::cout << "Current location " << this->currLoc << ", Point: " << this->p[num] << std::endl;						
-				return true;
-			}
+
 		}
+		
+
+		return res;
 	}
 
 	//Checks if the specified location is inside the shape (aka of the same color as current color)
-	bool imgCrawler::inShape(int where)
+	bool imgCrawler::inShape(int where, Point p)
 	{
-		Point pos = this->getPointAt(where);
+		Point pos = this->getPointAt(where, p);
 		//A point outside of the image bounderies is obviously not part of our object
 		if (!this->checkPointLegal(pos))
 			return false;
@@ -295,36 +423,41 @@ namespace MVEE {
 
 	}
 
-	Point imgCrawler::getPointAt(int whereTo)
+	//For definitions of Directions for whereTo, see the definition section at the header file.
+	Point imgCrawler::getPointAt(int whereTo, Point start)
 	{
-		Point pos = Point(0, 0);
+		Point pos;
+		if (start.x < 0 || start.y < 0)
+			pos = this->currLoc;
+		else
+			pos = start;
 		switch (whereTo) {
 		case POS_N:
-			 pos = Point(this->currLoc.x, this->currLoc.y + 1);
+			 pos = Point(pos.x, pos.y + 1);
 			break;
 		case POS_NE:
-			 pos = Point(this->currLoc.x + 1, this->currLoc.y + 1);
+			 pos = Point(pos.x + 1, pos.y + 1);
 			break;
 		case POS_E:
-			 pos = Point(this->currLoc.x + 1, this->currLoc.y);
+			 pos = Point(pos.x + 1, pos.y);
 			break;
 		case POS_SE:
-			 pos = Point(this->currLoc.x + 1, this->currLoc.y - 1);
+			 pos = Point(pos.x + 1, pos.y - 1);
 			break;
 		case POS_S:
-			 pos = Point(this->currLoc.x, this->currLoc.y - 1);
+			 pos = Point(pos.x, pos.y - 1);
 			break;
 		case POS_SW:
-			 pos = Point(this->currLoc.x - 1, this->currLoc.y - 1);
+			 pos = Point(pos.x - 1, pos.y - 1);
 			break;
 		case POS_W:
-			 pos = Point(this->currLoc.x - 1, this->currLoc.y);
+			 pos = Point(pos.x - 1, pos.y);
 			break;
 		case POS_NW:
-			 pos = Point(this->currLoc.x - 1, this->currLoc.y + 1);
+			 pos = Point(pos.x - 1, pos.y + 1);
 			break;
 		default:
-			 pos = Point(this->currLoc.x, this->currLoc.y);
+			 pos = Point(pos.x, pos.y);
 		}
 		return pos;
 	}
@@ -338,12 +471,30 @@ namespace MVEE {
 		else
 			return true;
 	}
+	//Returns true if a point is a border point - aka one of its neighboring pixels is of a different color.
+	bool imgCrawler::checkBorderPoint(Point p)
+	{
+		//Default point is current location
+		if (p.x < 0 || p.y < 0)
+			p = this->currLoc;
+		bool res = false;
+		bool expectedRes;																		//False if selected point is inside the shape, true otherwise.
+		this->image.at<uchar>(p) == this->color ? expectedRes = false : expectedRes = true;
+		for (int i = 1; i < 9; i++) {
+			if (this->inShape(i, p) == expectedRes) {
+				res = true;
+				break;
+			}
+		}
+		return res;
+	}
 
 	//Returns an array of size 9 where the i-th member is 1 if that direction can be in currentAngle's way, 0 otherwise. dirArr[0] is always 0.
-	int * imgCrawler::getAngleDirections()
+	int * imgCrawler::getAngleDirections(int angle)
 	{
 		int dirArr[9] = {};	
-		static double tempAngle;																		//Based on our angle we set members to 1 or 0
+		double tempAngle;
+		(abs(angle)>360)? tempAngle= this->getAngleData(false) : tempAngle = angle;																		//Based on our angle we set members to 1 or 0
 		//Can't do a switch cause it's a double =(
 		if (tempAngle <= 180 && tempAngle >= 0)
 			dirArr[1] = 1;
@@ -411,6 +562,18 @@ namespace MVEE {
 	void imgCrawler::setDebug(bool val)
 	{
 		this->debug = val;
+	}
+	//General testing
+	void imgCrawler::test()
+	{
+		cv::Mat tempMat;
+		this->image.copyTo(tempMat);
+		for (int i = 0; i < 50; i++) {
+			tempMat.at<uchar>(Point(20, i)) = 125;
+		}
+		cv::namedWindow("test", WINDOW_NORMAL); // Create a window for display.
+		imshow("test", tempMat); // Show our image inside it.
+		waitKey(0); // Wait for a keystroke in the window
 	}
 
 	/*int* imgCrawler::getApproxArray() {

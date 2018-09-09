@@ -2,6 +2,7 @@
 #ifndef MVEE_IMGCRAWLER_H
 #define MVEE_IMGCRAWLER_H
 #include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include <cmath>
 #include <iostream>
 using namespace cv;
@@ -58,17 +59,19 @@ namespace MVEE {
 		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
 		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
 		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
-		bool imgCrawler::inShape(int where = 0);									//Returns true if pointAt(where) is insiide the shape
+		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));									//Returns true if pointAt(where) is insiide the shape
 		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo
-		Point imgCrawler::getPointAt(int whereTo = 0);								//Gets the point relative to current location
+		Point imgCrawler::getPointAt(int whereTo = 0, Point start = Point(-1, -1));								//Gets the point relative to current location
 		bool imgCrawler::checkPointLegal(Point p);									//Checks if a point is within matrix boundries
-		int* imgCrawler::getAngleDirections();										//Helper function that returns an array of legal directions depending on the current angle
+		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1));									//Checks if a point is a border point
+		int* imgCrawler::getAngleDirections(int angle = 361);										//Helper function that returns an array of legal directions depending on the current angle
 		double getAngleData(bool convertToRad = true);								//Helper function that returns current angle - converts it to radians by defult.
 		void imgCrawler::expandP();													//Expands dynamic array P
 		float imgCrawler::pointDist(Point p1, Point p2);							//Returns distance between points.
 		void imgCrawler::printState();												//Prints current state of the crawler.
 		void imgCrawler::setDebug(bool val);										//Sets the crawler into debug mode.
 		/*int* getApproxArray();*/
+		void imgCrawler::test();													//General testing
 	};
 
 }

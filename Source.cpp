@@ -41,14 +41,10 @@ int main(int argc, char** argv)
 		}
 		cout << endl;
 	}
-	imgCrwl.findStartPoint(0, 3);
-	imgCrwl.printState();
+	imgCrwl.setDebug(true);
 	imgCrwl.run(0, 3, 10);
 	imgCrwl.printState();
-
-	namedWindow("Display window", WINDOW_NORMAL); // Create a window for display.
-	imshow("Display window", image); // Show our image inside it.
-
+	//imgCrwl.setAngle(Point(85,26),Point(22,44));
 	waitKey(0); // Wait for a keystroke in the window
 	return 0;
 }
