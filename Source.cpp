@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 
 	//Print Image matrix
 	cout << "M = " << image.cols << " x " << image.cols << endl;
-	
+	/*
 	for (int i = 0; i < image.rows; i+=5) {
 		for (int  j = 0; j < image.cols; j+=5) {
 			Scalar colour = image.at<uchar>(Point(j, i));
@@ -40,7 +40,7 @@ int main(int argc, char** argv)
 			cout << (int)colour.val[0]/10;
 		}
 		cout << endl;
-	}
+	}*/
 	imgCrwl.setDebug(true);
 	imgCrwl.run(0, 3, 10);
 	imgCrwl.printState();

@@ -11,9 +11,9 @@ namespace MVEE {
 	#define PI 3.14159265
 	#define CRAWLER_MODE_EDGE 0
 	#define CRAWLER_MODE_LINE 1
-	//Bellow are points relative to current position. You can look at it as: 8 1 2
-	//																		 7 0 3
-	//																		 6 5 4
+	//Bellow are points relative to current position. You can look at it as: 8 1 2 or in the real world 6 5 4 since y starts from the upper left corner
+	//																		 7 0 3						7 0 3
+	//																		 6 5 4						8 1 2
 	#define POS_CURR 0
 	#define POS_N 1
 	#define POS_NE 2
@@ -59,12 +59,13 @@ namespace MVEE {
 		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
 		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
 		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
-		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));									//Returns true if pointAt(where) is insiide the shape
+		bool imgCrawler::handleBump();							//Handles line approximation making the shape not convex
+		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));			//Returns true if pointAt(where) is insiide the shape
 		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo
-		Point imgCrawler::getPointAt(int whereTo = 0, Point start = Point(-1, -1));								//Gets the point relative to current location
+		Point imgCrawler::getPointAt(int whereTo = 0, Point start = Point(-1, -1));	//Gets the point relative to current location
 		bool imgCrawler::checkPointLegal(Point p);									//Checks if a point is within matrix boundries
-		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1));									//Checks if a point is a border point
-		int* imgCrawler::getAngleDirections(int angle = 361);										//Helper function that returns an array of legal directions depending on the current angle
+		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1));					//Checks if a point is a border point
+		int* imgCrawler::getAngleDirections(int angle = 361);						//Helper function that returns an array of legal directions depending on the current angle
 		double getAngleData(bool convertToRad = true);								//Helper function that returns current angle - converts it to radians by defult.
 		void imgCrawler::expandP();													//Expands dynamic array P
 		float imgCrawler::pointDist(Point p1, Point p2);							//Returns distance between points.
@@ -72,6 +73,8 @@ namespace MVEE {
 		void imgCrawler::setDebug(bool val);										//Sets the crawler into debug mode.
 		/*int* getApproxArray();*/
 		void imgCrawler::test();													//General testing
+		void imgCrawler::drawCross(cv::Mat image, Point p);							//Debugging
+		float* imgCrawler::checkDistNearMe(bool onlyBorder = true, bool onlyInShape = true, bool toPrint = true);
 	};
 
 }

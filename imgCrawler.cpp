@@ -77,12 +77,17 @@ namespace MVEE {
 	bool imgCrawler::run(int color, int eps1, int eps2, int x, int y) {
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
 			return false;
+		if (this->debug) {							//DEBUG
+			std::cout << "Starting Point:" << this->startingLoc << std::endl;
+		}
 		cv::Point left(this->startingLoc.x - 1, this->startingLoc.y);
 		cv::Point right(this->startingLoc.x + 1, this->startingLoc.y);
 		this->setAngle(this->startingLoc, left);						//Set movement to the left to find the first point
 		if (!this->findCorner(0))										//Try to find the first point
 			return false;
 		this->setAngle(this->startingLoc, right);					//Set the angle from the point we found to the starting point
+		this->startingLoc.x = (this->p[0].x);		//Update the starting point to be the point we found.
+		this->startingLoc.y = (this->p[0].y);		//^
 		if (!this->findCorner(1))										//Try to find the 2nd point
 			return false;
 		this->setAngle(this->p[0], this->p[1]);							//Set the angle to be between the 2 points we found.
@@ -172,6 +177,8 @@ namespace MVEE {
 	bool imgCrawler::findCorner(int num) {
 		bool res = false;							//Result to return
 		cv::Mat tempMat;							//Only exists for debugging purposes
+		String tempStr = "";						//^
+		float* tempArr;								//^
 		if (this->debug) {							//DEBUG
 			std::cout << "Finding corner " << num << " at angle " <<this->getAngleData(false) << std::endl;
 			this->image.copyTo(tempMat);
@@ -185,7 +192,7 @@ namespace MVEE {
 		Point prev = Point(0,0);
 
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
-		while (this->inShape() && !this->checkBorderPoint(this->currLoc)) {
+		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
 			bhop *= 2;
 			prev.x = this->currLoc.x;
 			prev.y = this->currLoc.y;
@@ -268,7 +275,7 @@ namespace MVEE {
 		//Get potential legal movement pixels
 		int* legalPixels = this->getAngleDirections();
 		if (this->debug) {						//DEBUG
-			String tempStr = "";
+			tempStr = "";
 			for (int i = 0; i < 9; i++)
 				tempStr += std::to_string(legalPixels[i]) + " ";
 			std::cout<< "Legal directions are " << tempStr << std::endl;
@@ -315,42 +322,23 @@ namespace MVEE {
 			}
 			//..or stop and declare current position as the corner we seek - and potentially switch to the other potential path
 			else {
-				//This means we are done, and only went in one direction
-				if (altStart.x == -1 && altStart.y == -1) {
-					this->p[num] = this->currLoc;
-					this->pointArrCounter++;
-					if ((this->pointArrCounter + 1) == this->pointArrSize)
-						this->expandP();
+				//This means we just had a small bump to cross
+				if (this->handleBump()) {
 					if (this->debug) {						//DEBUG
-						String wName = "Corner_" + std::to_string(num) + "_debug";
-						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-						imshow(wName, tempMat); // Show our image inside it.
-						waitKey(0); // Wait for a keystroke in the window
+						tempMat.at<uchar>(this->currLoc) = 175;
 					}
-					keepGoing = false;
-					res = true;
 				}
-				//This means there was another direction
 				else {
-					//This means we finished the first direction, and need to check the 2nd.
-					if (tempLoc.x == -1 && tempLoc.y == -1) {
-						tempLoc.x = this->currLoc.x;
-						tempLoc.y = this->currLoc.y;
-						this->currLoc.x = altStart.x;
-						this->currLoc.y = altStart.y;
-						this->moveCurrent(altDir);
-					}
-					//This means we finished the 2nd direction - if the first point is farther than current location, swap them
-					else {
-						if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
-							this->currLoc.x = tempLoc.x;
-							this->currLoc.y = tempLoc.y;
-						}	
+					//This means we are done, and only went in one direction
+					if (altStart.x == -1 && altStart.y == -1) {
 						this->p[num] = this->currLoc;
 						this->pointArrCounter++;
 						if ((this->pointArrCounter + 1) == this->pointArrSize)
 							this->expandP();
 						if (this->debug) {						//DEBUG
+							tempStr = "";
+							this->checkDistNearMe();
+							drawCross(tempMat, this->currLoc);
 							String wName = "Corner_" + std::to_string(num) + "_debug";
 							cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
 							imshow(wName, tempMat); // Show our image inside it.
@@ -358,6 +346,39 @@ namespace MVEE {
 						}
 						keepGoing = false;
 						res = true;
+					}
+					//This means there was another direction
+					else {
+						//This means we finished the first direction, and need to check the 2nd.
+						if (tempLoc.x == -1 && tempLoc.y == -1) {
+							tempLoc.x = this->currLoc.x;
+							tempLoc.y = this->currLoc.y;
+							this->currLoc.x = altStart.x;
+							this->currLoc.y = altStart.y;
+							this->moveCurrent(altDir);
+						}
+						//This means we finished the 2nd direction - if the first point is farther than current location, swap them
+						else {
+							if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
+								this->currLoc.x = tempLoc.x;
+								this->currLoc.y = tempLoc.y;
+							}	
+							this->p[num] = this->currLoc;
+							this->pointArrCounter++;
+							if ((this->pointArrCounter + 1) == this->pointArrSize)
+								this->expandP();
+							if (this->debug) {						//DEBUG
+								tempStr = "";
+								this->checkDistNearMe();
+								drawCross(tempMat, this->currLoc);
+								String wName = "Corner_" + std::to_string(num) + "_debug";
+								cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+								imshow(wName, tempMat); // Show our image inside it.
+								waitKey(0); // Wait for a keystroke in the window
+							}
+							keepGoing = false;
+							res = true;
+						}
 					}
 				}
 			}
@@ -388,6 +409,155 @@ namespace MVEE {
 		
 
 		return res;
+	}
+
+	//Part of findCorner. Detects possible "bump" - an incorrect detection of corner due to the shape being an approximate convex one and not really convex.
+	//Handles the case where we are stuck on a corner while we should have continued, or where we are stuck on flat line that we should have travarsed because it represents an angle.
+	bool imgCrawler::handleBump()
+	{
+		int botDir = 0;														//Our relative "bottom"
+		int side1 = 0, side2 = 0, diag1 =0, diag2 = 0, upSide = 0;			//The sides in which we should move, the diagonal, and which side contains the "jump up"
+		float initDist = this->pointDist(this->currLoc,this->startingLoc);	//Initial distance
+		float dist1, dist2;
+		Point tempLocA = Point(-1, -1);
+		Point tempLocB = Point(-1, -1);
+		Point tempLocC = Point(-1, -1);
+		if (this->debug) {		//Debug
+			std::cout << "Bump@ " << this->currLoc << ", ";
+		}
+		//Find out our relative "down" direction. Remember that if we really are stuck on a bump, there has to be one and only one.
+		if (!this->inShape(8) && !this->inShape(1) && !this->inShape(2))
+			botDir = 1;
+		if (!this->inShape(2) && !this->inShape(3) && !this->inShape(4))
+			if (botDir == 0)
+				botDir = 3;
+			else
+				return false;
+		if (!this->inShape(4) && !this->inShape(5) && !this->inShape(6))
+			if (botDir == 0)
+				botDir = 5;
+			else
+				return false;
+		if (!this->inShape(6) && !this->inShape(7) && !this->inShape(8))
+			if (botDir == 0)
+				botDir = 7;
+			else
+				return false;
+		//Something went wrong
+		if (botDir == 0) {
+			if (this->debug)
+				std::cout << "Something strange happaned in bump detection" << std::endl;
+			return false;
+		}
+		if (this->debug) {		//Debug
+			std::cout << ":|" << botDir << "|";
+		}
+
+		//Set the potential sides depending - the side of our "step" is side1, the side along the "bottom" is side2
+		//Remember that we *must* be stuck in a corner!
+		switch (botDir) {
+		case 1:
+			this->inShape(3) ? side1 = 7 : side1 = 3;
+
+			break;
+		case 3:
+			this->inShape(5) ? side1 = 1 : side1 = 5;
+			break;
+		case 5:
+			this->inShape(7) ? side1 = 3 : side1 = 7;
+			break;
+		case 7:
+			this->inShape(1) ? side1 = 5 : side1 = 1;
+			break;
+		}
+		side2 = (side1 + 4) % 8;
+
+		//Handle diagonals - diag1 should be currently in shape, diag2 should be currently outside of shape
+		this->inShape(side1 + 1) ? diag1 = side1 + 1 : diag1 = side1 - 1;
+		if (diag1 == 0)
+			diag1 = 8;
+		this->inShape(side2 + 1) ? diag2 = side2 - 1 : diag2 = side1 + 1;
+		if (diag2 == 0)
+			diag2 = 8;
+		std::cout << side1 << "|" << diag1 << "|" << side2 << "|" << diag2 << "|;";
+
+		//Move to each side, and set the temp locations accordingly. 
+		//Side 1:
+		tempLocA.x = this-> currLoc.x; 
+		tempLocA.y = this->currLoc.y;
+		this->moveCurrent(diag1);
+		while (this->inShape(side1)) 
+			this->moveCurrent(side1);
+		dist1 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+		//Swap locations - I know it could be done a bit pretteir, but Im way past wasting even moment on this
+		tempLocB.x = this->currLoc.x;
+		tempLocB.y = this->currLoc.y;
+		this->currLoc.x = tempLocA.x;
+		this->currLoc.y = tempLocA.y;
+		tempLocA.x = tempLocB.x;
+		tempLocA.y = tempLocB.y;
+
+		//Side 2:
+		tempLocB.x = this->currLoc.x;
+		tempLocB.y = this->currLoc.y;
+		while (!this->inShape(diag2) && this->inShape(side2))
+			this->moveCurrent(side2);
+		//This means we had 2 "upsides" - meaning there i no way we were in a "bump".
+		if (!this->inShape(diag2)) {
+			upSide = 1;
+		}
+		else {
+			dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+			this->moveCurrent(diag2);
+		}
+		tempLocC.x = this->currLoc.x;
+		tempLocC.y = this->currLoc.y;
+		this->currLoc.x = tempLocB.x;
+		this->currLoc.y = tempLocB.y;
+		tempLocB.x = tempLocC.x;
+		tempLocB.y = tempLocC.y;
+
+		if (this->debug) {		//Debug
+			std::cout << "points: " << tempLocA << "," << tempLocB;
+		}
+
+		//Handle possible cases
+		if (upSide = 1) {
+			if (dist1 > initDist) {
+				this->currLoc.x = tempLocA.x;
+				this->currLoc.y = tempLocA.y;
+				if (this->debug) {		//Debug
+					std::cout << ":J@ " << tempLocA  << std::endl;
+				}
+				return true;
+			}
+		}
+		else {
+			if (dist1 > dist2) {
+				if (dist1 > initDist) {
+					this->currLoc.x = tempLocA.x;
+					this->currLoc.y = tempLocA.y;
+					if (this->debug) {		//Debug
+						std::cout << ":J@ " << tempLocA << std::endl;
+					}
+					return true;
+				}
+			}
+			else {
+				if (dist2 > initDist) {
+					this->currLoc.x = tempLocB.x;
+					this->currLoc.y = tempLocB.y;
+					if (this->debug) {		//Debug
+						std::cout << ":J@ " << tempLocB << std::endl;
+					}
+					return true;
+				}
+			}
+		}
+		if (this->debug) {		//Debug
+			std::cout << ":Stay." << tempLocA << "," << tempLocB << std::endl;
+		}
+		return false;
 	}
 
 	//Checks if the specified location is inside the shape (aka of the same color as current color)
@@ -496,21 +666,22 @@ namespace MVEE {
 		double tempAngle;
 		(abs(angle)>360)? tempAngle= this->getAngleData(false) : tempAngle = angle;																		//Based on our angle we set members to 1 or 0
 		//Can't do a switch cause it's a double =(
-		if (tempAngle <= 180 && tempAngle >= 0)
+		//Also, I have to remember the image is mirrored vertically - as such, this should be mirrored as well.
+		if (tempAngle < -135 || tempAngle > -45)
 			dirArr[1] = 1;
-		if (tempAngle <= 135 && tempAngle >= -45)
+		if (tempAngle < 180 && tempAngle > -90)
 			dirArr[2] = 1;
-		if (tempAngle <= 90 && tempAngle >= -90)
+		if (tempAngle < 135 && tempAngle > -135)
 			dirArr[3] = 1;
-		if (tempAngle <= 45 && tempAngle >= -135)
+		if (tempAngle < 90 && tempAngle > -180)
 			dirArr[4] = 1;
-		if (tempAngle <= 0 || tempAngle == 180)
+		if (tempAngle < 45 || tempAngle > 135)
 			dirArr[5] = 1;
-		if (tempAngle <= -45 || tempAngle >= 135)
+		if (tempAngle < 0 || tempAngle > 90)
 			dirArr[6] = 1;
-		if (tempAngle <= -90 || tempAngle >= 90)
+		if (tempAngle < -45 || tempAngle > 45)
 			dirArr[7] = 1;
-		if (tempAngle <= -135 || tempAngle >= 45)
+		if (tempAngle < -90 || tempAngle > 0)
 			dirArr[8] = 1;
 		return dirArr;
 	}
@@ -545,6 +716,7 @@ namespace MVEE {
 		return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
 	}
 
+	//Prints current state - for debugging
 	void imgCrawler::printState() {
 		std::cout << "Starting Location:" << this->startingLoc << std::endl;
 		std::cout << "Current Location:" << this->currLoc << std::endl;
@@ -559,10 +731,12 @@ namespace MVEE {
 	
 	}
 
+	//Sets the crawler into debug mode
 	void imgCrawler::setDebug(bool val)
 	{
 		this->debug = val;
 	}
+
 	//General testing
 	void imgCrawler::test()
 	{
@@ -576,6 +750,46 @@ namespace MVEE {
 		waitKey(0); // Wait for a keystroke in the window
 	}
 
+	//For debuging purposes
+	void imgCrawler::drawCross(cv::Mat image, Point p) {
+		image.at<uchar>(p) = 255;
+		image.at<uchar>(this->getPointAt(1,p)) = 25;
+		image.at<uchar>(this->getPointAt(3, p)) = 25;
+		image.at<uchar>(this->getPointAt(5, p)) = 25;
+		image.at<uchar>(this->getPointAt(7, p)) = 25;
+	}
+
+	//Returns an array of the distances of all points near you from the start
+	float * imgCrawler::checkDistNearMe(bool onlyBorder, bool onlyInShape, bool toPrint)
+	{	
+		float resArr[9] = {};
+		for (int i = 0; i < 9; i++){
+			resArr[i] = 1;
+		}
+		for (int i = 0; i < 9; i++) {
+			if (resArr[i] == 0) {
+				resArr[i] = 0;
+			}
+			else {
+				resArr[i] = this->pointDist(this->startingLoc, this->getPointAt(i));
+				if (onlyBorder && !this->checkBorderPoint(this->getPointAt(i))) {
+					resArr[i] = 0;
+				}
+				if (onlyInShape && !this->inShape(i))
+					resArr[i] = 0;
+			}
+			
+		}
+		if (toPrint) {
+			String tempStr = "";
+			for (int i = 0; i < 9; i++) {\
+				tempStr += std::to_string(resArr[i]) + " ";
+			}
+			std::cout <<"Distaces from near "<<this->currLoc<<" to "<<this->startingLoc<<" are "<< tempStr << std::endl;
+		}
+
+		return resArr;
+	}
 	/*int* imgCrawler::getApproxArray() {
 	return this->approxArray;
 	}
