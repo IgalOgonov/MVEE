@@ -161,10 +161,13 @@ namespace MVEE {
 			this->startingLoc = Point(x, y);
 			return true;
 		}
-		else if (deltaX < eps || deltaY < eps)						//If we reached our limit, exit
+
+		else if (deltaX < eps || deltaY < eps || x<0 || y<0)		//If we reached our limit, exit
 			return false;
+
 		else if (this->startingLoc.x != 0)			//if startingLoc.x isn't 0, it must mean y isn't either, so they were modified
 			return true;
+
 		else{
 			return findStartPointByQuadrats(color, eps, x + deltaX, y + deltaY, deltaX, deltaY) ||
 				findStartPointByQuadrats(color, eps, x + deltaX, y - deltaY, deltaX, deltaY) ||
@@ -187,19 +190,34 @@ namespace MVEE {
 		int bhop = 1;								//This is how much we "hop" each time
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
+		int leftOverX = 0, leftOverY = 0;			//Leftovers we might need to deal with
 
 		this->currLoc  = this->startingLoc;
-		Point prev = Point(0,0);
-
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
 		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
 			bhop *= 2;
-			prev.x = this->currLoc.x;
-			prev.y = this->currLoc.y;
+
 			this->currLoc.x += (int)(bhop*dx);
-			if (bhop*dx - int(bhop*dx) >0.00000001)	this->currLoc.x += 1; //Round up
+			if (bhop*dx - int(bhop*dx) >0.00000001)	
+				this->currLoc.x += 1; //Round up
 			this->currLoc.y += (int)(bhop*dy);
-			if (bhop*dy - int(bhop*dy) >0.00000001)	this->currLoc.y += 1; //Round up
+			if (bhop*dy - int(bhop*dy) >0.00000001)	
+				this->currLoc.y += 1; //Round up
+
+			//If we go bellow 0, there will be leftover we need to deal with
+			if (this->currLoc.x < 0) {
+				leftOverX = this->currLoc.x;
+				this->currLoc.x = 0;
+				if(this->debug)
+					std::cout << "Leftovers on axe x:" << leftOverX << std::endl;
+			}
+			if (this->currLoc.y < 0) {
+				leftOverY = this->currLoc.y;
+				this->currLoc.y = 0;
+				if (this->debug)
+					std::cout << "Leftovers on axe y:" << leftOverY << std::endl;
+			}
+
 			if (this->debug) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 190;
 			}
@@ -211,16 +229,37 @@ namespace MVEE {
 			if (this->checkBorderPoint(this->currLoc))
 				break;
 			bhop /= 2;
-			prev.x = this->currLoc.x;
-			prev.y = this->currLoc.y;
+
 			if (this->inShape()) {
 				this->currLoc.x += (int)(bhop*dx);
 				this->currLoc.y += (int)(bhop*dy);
 			}
 			else {
-				this->currLoc.x -= (int)(bhop*dx);
-				this->currLoc.y -= (int)(bhop*dy);
+				//We might have leftover on axe x
+				if (leftOverX < 0) {
+					leftOverX -= (int)(bhop*dx);
+					if (leftOverX > 0) {
+						this->currLoc.x += leftOverX;
+						leftOverX = 0;
+					}
+				}
+				else {
+					this->currLoc.x -= (int)(bhop*dx);
+				}
+				//We might have leftover on axe y
+				if (leftOverY < 0) {
+					leftOverY -= (int)(bhop*dy);
+					if (leftOverY > 0) {
+						this->currLoc.y += leftOverY;
+						leftOverY = 0;
+					}
+				}
+				else {
+					this->currLoc.y -= (int)(bhop*dy);
+				}
+
 			}
+
 			if (this->debug) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 145;
 			}
@@ -419,6 +458,7 @@ namespace MVEE {
 		int side1 = 0, side2 = 0, diag1 =0, diag2 = 0, upSide = 0;			//The sides in which we should move, the diagonal, and which side contains the "jump up"
 		float initDist = this->pointDist(this->currLoc,this->startingLoc);	//Initial distance
 		float dist1, dist2;
+		bool earlyReturn = false;
 		Point tempLocA = Point(-1, -1);
 		Point tempLocB = Point(-1, -1);
 		Point tempLocC = Point(-1, -1);
@@ -432,21 +472,21 @@ namespace MVEE {
 			if (botDir == 0)
 				botDir = 3;
 			else
-				return false;
+				earlyReturn = true;
 		if (!this->inShape(4) && !this->inShape(5) && !this->inShape(6))
-			if (botDir == 0)
+			if (botDir == 0 && !earlyReturn)
 				botDir = 5;
 			else
-				return false;
+				earlyReturn = true;
 		if (!this->inShape(6) && !this->inShape(7) && !this->inShape(8))
-			if (botDir == 0)
+			if (botDir == 0 && !earlyReturn)
 				botDir = 7;
 			else
-				return false;
+				earlyReturn = true;
 		//Something went wrong
-		if (botDir == 0) {
+		if (botDir == 0 || earlyReturn) {
 			if (this->debug)
-				std::cout << "Something strange happaned in bump detection" << std::endl;
+				std::cout << "early return." << std::endl;
 			return false;
 		}
 		if (this->debug) {		//Debug
@@ -476,7 +516,7 @@ namespace MVEE {
 		this->inShape(side1 + 1) ? diag1 = side1 + 1 : diag1 = side1 - 1;
 		if (diag1 == 0)
 			diag1 = 8;
-		this->inShape(side2 + 1) ? diag2 = side2 - 1 : diag2 = side1 + 1;
+		this->inShape(side2 + 1) ? diag2 = side2 - 1 : diag2 = side2 + 1;
 		if (diag2 == 0)
 			diag2 = 8;
 		std::cout << side1 << "|" << diag1 << "|" << side2 << "|" << diag2 << "|;";
@@ -507,8 +547,8 @@ namespace MVEE {
 			upSide = 1;
 		}
 		else {
-			dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
 			this->moveCurrent(diag2);
+			dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
 		}
 		tempLocC.x = this->currLoc.x;
 		tempLocC.y = this->currLoc.y;
@@ -522,7 +562,7 @@ namespace MVEE {
 		}
 
 		//Handle possible cases
-		if (upSide = 1) {
+		if (upSide == 1) {
 			if (dist1 > initDist) {
 				this->currLoc.x = tempLocA.x;
 				this->currLoc.y = tempLocA.y;
@@ -555,7 +595,8 @@ namespace MVEE {
 			}
 		}
 		if (this->debug) {		//Debug
-			std::cout << ":Stay." << tempLocA << "," << tempLocB << std::endl;
+			std::cout << ":Stay." << std::endl;
+			std::cout << "DIni: " << initDist <<", D1: "<<dist1<< ", D2: "<<dist2 <<std::endl;
 		}
 		return false;
 	}
@@ -646,7 +687,7 @@ namespace MVEE {
 	{
 		//Default point is current location
 		if (p.x < 0 || p.y < 0)
-			p = this->currLoc;
+			return false;
 		bool res = false;
 		bool expectedRes;																		//False if selected point is inside the shape, true otherwise.
 		this->image.at<uchar>(p) == this->color ? expectedRes = false : expectedRes = true;
