@@ -14,6 +14,8 @@ namespace MVEE {
 		this->startingLoc = Point(0, 0);
 		this->pointArrSize = 4;
 		this->pointArrCounter = 0;
+		this->Q = cv::Mat::zeros(2,2, CV_32F);
+		this->debugCounter = 0;
 														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
 														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
 		this->p = new Point[this->pointArrSize];
@@ -100,6 +102,7 @@ namespace MVEE {
 		if (!this->findCorner(3))
 			return false;
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
+		
 	}
 
 	//Search the image for current color. Will search all squares, from the size of the image, n (if it's nxn) down to eps (the smallest shape should enclose an eps x eps square).
@@ -290,6 +293,10 @@ namespace MVEE {
 							tempTry = false;
 						}
 					}
+
+				if (this->debug) {
+					tempMat.at<uchar>(this->currLoc) = 145;
+				}
 			}
 		//This means some problem occured
 		if (!this->inShape()) {
@@ -300,6 +307,7 @@ namespace MVEE {
 				imshow(wName, tempMat); // Show our image inside it.
 				waitKey(0); // Wait for a keystroke in the window
 			}
+			tempMat.release;
 			return res;
 		}
 
@@ -371,9 +379,10 @@ namespace MVEE {
 					//This means we are done, and only went in one direction
 					if (altStart.x == -1 && altStart.y == -1) {
 						this->p[num] = this->currLoc;
+						this->u[num] = 1 / 4;
 						this->pointArrCounter++;
 						if ((this->pointArrCounter + 1) == this->pointArrSize)
-							this->expandP();
+							this->expandArr();
 						if (this->debug) {						//DEBUG
 							tempStr = "";
 							this->checkDistNearMe();
@@ -395,6 +404,9 @@ namespace MVEE {
 							this->currLoc.x = altStart.x;
 							this->currLoc.y = altStart.y;
 							this->moveCurrent(altDir);
+							if (this->debug) {
+								tempMat.at<uchar>(this->currLoc) = 175;
+							}
 						}
 						//This means we finished the 2nd direction - if the first point is farther than current location, swap them
 						else {
@@ -403,9 +415,10 @@ namespace MVEE {
 								this->currLoc.y = tempLoc.y;
 							}	
 							this->p[num] = this->currLoc;
+							this->u[num] = 1 / 4;
 							this->pointArrCounter++;
 							if ((this->pointArrCounter + 1) == this->pointArrSize)
-								this->expandP();
+								this->expandArr();
 							if (this->debug) {						//DEBUG
 								tempStr = "";
 								this->checkDistNearMe();
@@ -446,7 +459,7 @@ namespace MVEE {
 
 		}
 		
-
+		tempMat.release;
 		return res;
 	}
 
@@ -455,8 +468,8 @@ namespace MVEE {
 	bool imgCrawler::handleBump()
 	{
 		int botDir = 0;														//Our relative "bottom"
-		int side1 = 0, side2 = 0, diag1 =0, diag2 = 0, upSide = 0;			//The sides in which we should move, the diagonal, and which side contains the "jump up"
-		float initDist = this->pointDist(this->currLoc,this->startingLoc);	//Initial distance
+		int side1 = 0, side2 = 0, diag1 = 0, diag2 = 0, upSide = 0;			//The sides in which we should move, the diagonal, and which side contains the "jump up"
+		float initDist = this->pointDist(this->currLoc, this->startingLoc);	//Initial distance
 		float dist1, dist2;
 		bool earlyReturn = false;
 		Point tempLocA = Point(-1, -1);
@@ -523,11 +536,12 @@ namespace MVEE {
 
 		//Move to each side, and set the temp locations accordingly. 
 		//Side 1:
-		tempLocA.x = this-> currLoc.x; 
+		tempLocA.x = this->currLoc.x;
 		tempLocA.y = this->currLoc.y;
 		this->moveCurrent(diag1);
-		while (this->inShape(side1)) 
+		while (this->inShape(side1)) {
 			this->moveCurrent(side1);
+		}
 		dist1 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
 		//Swap locations - I know it could be done a bit pretteir, but Im way past wasting even moment on this
 		tempLocB.x = this->currLoc.x;
@@ -540,8 +554,9 @@ namespace MVEE {
 		//Side 2:
 		tempLocB.x = this->currLoc.x;
 		tempLocB.y = this->currLoc.y;
-		while (!this->inShape(diag2) && this->inShape(side2))
+		while (!this->inShape(diag2) && this->inShape(side2)) {
 			this->moveCurrent(side2);
+		}
 		//This means we had 2 "upsides" - meaning there i no way we were in a "bump".
 		if (!this->inShape(diag2)) {
 			upSide = 1;
@@ -622,8 +637,8 @@ namespace MVEE {
 	{
 		Point pos = this->getPointAt(whereTo);
 		//A point outside of the image bounderies is obviously not part of our object
-			if(!this->checkPointLegal(pos))
-				return false;
+		if(!this->checkPointLegal(pos))
+			return false;
 		//If it is, move there
 		else {
 			this->currLoc.x = pos.x;
@@ -676,6 +691,10 @@ namespace MVEE {
 	//Checks if a point is inside the image bounderies
 	bool imgCrawler::checkPointLegal(Point p)
 	{
+		if (this->debug) {
+			this->debugCounter++;
+		}
+
 		if (p.x <= 0 || p.y <= 0 ||
 			p.x > this->image.cols || p.y > this->image.rows)
 			return false;
@@ -736,18 +755,62 @@ namespace MVEE {
 	}
 
 	//Expands our dynamic array P - trivial, all allocations/deletes delt with
-	void imgCrawler::expandP() {
+	void imgCrawler::expandArr() {
+
 		int oldSize = this->pointArrSize;
 		int newSize = oldSize * 2;
-		Point* temp = new Point[oldSize];
-		for (int i = 0; i < oldSize; i++)
-			temp[i] = this->p[i];
+
+		Point* temp1 = new Point[oldSize];
+		float* temp2 = new float[oldSize];
+
+		for (int i = 0; i < oldSize; i++) {
+			temp1[i] = this->p[i];
+			temp2[i] = this->u[i];
+		}
+
 		delete[] this->p;
+		delete[] this->u;
+
 		this->p = new Point[newSize];
-		for (int i = 0; i < oldSize; i++)
-			this->p[i] = temp[i];
-		delete[] temp;
+		this->u = new float[newSize];
+
+		for (int i = 0; i < oldSize; i++) {
+			this->p[i] = temp1[i];
+			this->u[i] = temp2[i];
+		}
+
+		delete[] temp1;
+		delete[] temp2;
+
 		this->pointArrSize = newSize;
+	}
+
+	//Calculates Q, according to the paper - alg (28).
+	void imgCrawler::calcQ()
+	{
+		//Calculate U
+		Mat Ui = Mat::eye(this->pointArrCounter, this->pointArrCounter, CV_32F);
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			Ui.at<uchar>(Point(i, i)) *= this->u[i];
+		}
+		//Make u into a 1x|p| matrix
+		Mat ui = Mat(this->pointArrCounter, 1, CV_32F);
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			ui.at<uchar>(Point(i, 0)) = this->u[i];
+		}
+		//Initialize P
+		Mat P = Mat(2, this->pointArrCounter, CV_32F);
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			P.at<uchar>(Point(0, i)) = this->p[i].x;
+			P.at<uchar>(Point(1, i)) = this->p[i].y;
+		}
+		if (this->debug) {//DEBUG
+			std::cout << "Ui: " << Ui << std::endl;
+			std::cout << "ui: " << ui << std::endl;
+			std::cout << "P: " << P << std::endl;
+		}
+		//Calculate Q according to (28)
+		this->Q = (P * Ui * P.t() - (P * ui)*((P * ui).t())).inv() * (1 / 4);
 	}
 
 	//Euclidean distance between 2 points
@@ -755,6 +818,13 @@ namespace MVEE {
 	{
 		cv::Point2f diff = p1 - p2;
 		return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
+	}
+
+	//Distance between point p and the edge of the elipsoid - alg (45)
+	float imgCrawler::elipsDist(Point p)
+	{
+		float res = -1;
+		return 0.0f;
 	}
 
 	//Prints current state - for debugging

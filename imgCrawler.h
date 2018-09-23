@@ -29,11 +29,14 @@ namespace MVEE {
 
 	private:
 		Mat image;			//Image to crawl
+		Mat Q;				//Used in the algorithm
 		Point startingLoc;	//Starting location
 		Point currLoc;		//Current location
 		Point tempLoc;		//Temporary location
 		Point* p;			//Dynamic array of points
 		bool debug;			//Debug mode active.
+		int debugCounter;	//Used for debugging
+		float* u;			//Dynamic array of point weights
 		int pointArrSize;	//Just to make it easier to keep track of P's size
 		int pointArrCounter;//Keeps track of our current number of elements in p
 		int color;			//Current color
@@ -59,7 +62,7 @@ namespace MVEE {
 		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
 		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
 		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
-		bool imgCrawler::handleBump();							//Handles line approximation making the shape not convex
+		bool imgCrawler::handleBump();												//Handles line approximation making the shape not convex
 		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));			//Returns true if pointAt(where) is insiide the shape
 		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo
 		Point imgCrawler::getPointAt(int whereTo = 0, Point start = Point(-1, -1));	//Gets the point relative to current location
@@ -67,8 +70,10 @@ namespace MVEE {
 		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1));					//Checks if a point is a border point
 		int* imgCrawler::getAngleDirections(int angle = 361);						//Helper function that returns an array of legal directions depending on the current angle
 		double getAngleData(bool convertToRad = true);								//Helper function that returns current angle - converts it to radians by defult.
-		void imgCrawler::expandP();													//Expands dynamic array P
+		void imgCrawler::expandArr();													//Expands dynamic array P
+		void imgCrawler::calcQ();													//Calculates Q
 		float imgCrawler::pointDist(Point p1, Point p2);							//Returns distance between points.
+		float imgCrawler::elipsDist(Point p);										//Returns distance from point p to the  ellipsoid.
 		void imgCrawler::printState();												//Prints current state of the crawler.
 		void imgCrawler::setDebug(bool val);										//Sets the crawler into debug mode.
 		/*int* getApproxArray();*/
