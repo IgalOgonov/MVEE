@@ -14,11 +14,11 @@ namespace MVEE {
 		this->startingLoc = Point(0, 0);
 		this->pointArrSize = 4;
 		this->pointArrCounter = 0;
-		this->Q = cv::Mat::zeros(2,2, CV_32F);
 		this->debugCounter = 0;
 														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
 														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
 		this->p = new Point[this->pointArrSize];
+		this->u = new float[this->pointArrSize];
 	}
 
 	//Destructor
@@ -102,7 +102,8 @@ namespace MVEE {
 		if (!this->findCorner(3))
 			return false;
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
-		
+		//Calculate Q for the first time
+		this->calcQ();
 	}
 
 	//Search the image for current color. Will search all squares, from the size of the image, n (if it's nxn) down to eps (the smallest shape should enclose an eps x eps square).
@@ -307,7 +308,7 @@ namespace MVEE {
 				imshow(wName, tempMat); // Show our image inside it.
 				waitKey(0); // Wait for a keystroke in the window
 			}
-			tempMat.release;
+			tempMat.release();
 			return res;
 		}
 
@@ -379,10 +380,14 @@ namespace MVEE {
 					//This means we are done, and only went in one direction
 					if (altStart.x == -1 && altStart.y == -1) {
 						this->p[num] = this->currLoc;
-						this->u[num] = 1 / 4;
+						this->u[num] = 1.f / 4;
 						this->pointArrCounter++;
-						if ((this->pointArrCounter + 1) == this->pointArrSize)
-							this->expandArr();
+						if ((this->pointArrCounter + 1) == this->pointArrSize) {
+							if (this->debug) {						//DEBUG
+								std::cout << "Expanding array!";
+								this->expandArr();
+							}
+						}
 						if (this->debug) {						//DEBUG
 							tempStr = "";
 							this->checkDistNearMe();
@@ -415,10 +420,14 @@ namespace MVEE {
 								this->currLoc.y = tempLoc.y;
 							}	
 							this->p[num] = this->currLoc;
-							this->u[num] = 1 / 4;
+							this->u[num] = 1.f / 4;
 							this->pointArrCounter++;
-							if ((this->pointArrCounter + 1) == this->pointArrSize)
-								this->expandArr();
+							if ((this->pointArrCounter + 1) == this->pointArrSize) {
+								if (this->debug) {						//DEBUG
+									std::cout << "Expanding array!";
+									this->expandArr();
+								}
+							}
 							if (this->debug) {						//DEBUG
 								tempStr = "";
 								this->checkDistNearMe();
@@ -459,7 +468,7 @@ namespace MVEE {
 
 		}
 		
-		tempMat.release;
+		tempMat.release();
 		return res;
 	}
 
@@ -573,6 +582,8 @@ namespace MVEE {
 		tempLocB.y = tempLocC.y;
 
 		if (this->debug) {		//Debug
+			if (upSide == 1)
+				std::cout << "-upS-";
 			std::cout << "points: " << tempLocA << "," << tempLocB;
 		}
 
@@ -635,6 +646,10 @@ namespace MVEE {
 	//Checks if the specified location is inside the shape (aka of the same color as current color)
 	bool imgCrawler::moveCurrent(int whereTo)
 	{
+		if (whereTo < 0 || whereTo > 8)
+			return false;
+		else if (whereTo == 0)
+			return true;
 		Point pos = this->getPointAt(whereTo);
 		//A point outside of the image bounderies is obviously not part of our object
 		if(!this->checkPointLegal(pos))
@@ -788,29 +803,85 @@ namespace MVEE {
 	//Calculates Q, according to the paper - alg (28).
 	void imgCrawler::calcQ()
 	{
-		//Calculate U
+
 		Mat Ui = Mat::eye(this->pointArrCounter, this->pointArrCounter, CV_32F);
-		for (int i = 0; i < this->pointArrCounter; i++) {
-			Ui.at<uchar>(Point(i, i)) *= this->u[i];
-		}
-		//Make u into a 1x|p| matrix
 		Mat ui = Mat(this->pointArrCounter, 1, CV_32F);
-		for (int i = 0; i < this->pointArrCounter; i++) {
-			ui.at<uchar>(Point(i, 0)) = this->u[i];
-		}
-		//Initialize P
 		Mat P = Mat(2, this->pointArrCounter, CV_32F);
+
+		//Calculate U
 		for (int i = 0; i < this->pointArrCounter; i++) {
-			P.at<uchar>(Point(0, i)) = this->p[i].x;
-			P.at<uchar>(Point(1, i)) = this->p[i].y;
+			Ui.at<float>(i, i) *= this->u[i];
 		}
-		if (this->debug) {//DEBUG
-			std::cout << "Ui: " << Ui << std::endl;
-			std::cout << "ui: " << ui << std::endl;
-			std::cout << "P: " << P << std::endl;
+		/*if (debug) {
+			std::cout << "Ui: "<<std::endl;
+			for (int i = 0; i < this->pointArrCounter; i++) {
+				for (int j = 0; j < this->pointArrCounter; j++) {
+					std::cout << Ui.at<float>(i, j);
+					if (j < this->pointArrCounter - 1)
+						std::cout << " ";
+					else
+						std::cout << std::endl;
+				}
+			}
+		}*/
+
+		//Make u into a 1x|p| matrix
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			ui.at<float>(i, 0) = this->u[i];
 		}
+		/*if (debug) {
+			std::cout << "u: (";
+			for (int i = 0; i < this->pointArrCounter; i++) {
+				std::cout << ui.at<float>(i, 0);
+				if (i < this->pointArrCounter - 1)
+					std::cout << " ";
+			}
+			std::cout << ")^t" << std::endl;
+		}*/
+		//Initialize P
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			P.at<float>(0, i) = this->p[i].x;
+			P.at<float>(1, i) = this->p[i].y;
+		}
+		/*if (debug) {
+			std::cout << "P:"<< std::endl;
+			for (int i = 0; i < this->pointArrCounter; i++) {
+				std::cout << P.at<float>(0, i) << "," << P.at<float>(1, i)<<std::endl;
+			}
+		}*/
+
 		//Calculate Q according to (28)
-		this->Q = (P * Ui * P.t() - (P * ui)*((P * ui).t())).inv() * (1 / 4);
+		/*std::cout << "P: " << P.rows << "x" << P.cols << std::endl;
+		std::cout << "Ui: " << Ui.rows << "x" << Ui.cols << std::endl; */
+		this->Q = P * Ui * P.t();
+		/*std::cout << "Q1: " << std::endl;
+		std::cout << this->Q.at<float>(0, 0) << " ";
+		std::cout << this->Q.at<float>(0, 1) << std::endl;
+		std::cout << this->Q.at<float>(1, 0) << " ";
+		std::cout << this->Q.at<float>(1, 1) << std::endl; */
+		this->Q = this->Q -(P * ui)*((P * ui).t());
+		/*std::cout << "Q2: " << std::endl;
+		std::cout << this->Q.at<float>(0, 0) << " ";
+		std::cout << this->Q.at<float>(0, 1) << std::endl;
+		std::cout << this->Q.at<float>(1, 0) << " ";
+		std::cout << this->Q.at<float>(1, 1) << std::endl; */
+		this->Q = this->Q.inv();
+		/*std::cout << "Q3: " << std::endl;
+		std::cout << this->Q.at<float>(0, 0) << " ";
+		std::cout << this->Q.at<float>(0, 1) << std::endl;
+		std::cout << this->Q.at<float>(1, 0) << " ";
+		std::cout << this->Q.at<float>(1, 1) << std::endl; */
+		this->Q = this->Q *(1.f / 4);
+		/*std::cout << "Q4: " << std::endl;
+		std::cout << this->Q.at<float>(0, 0) << " ";
+		std::cout << this->Q.at<float>(0, 1) << std::endl;
+		std::cout << this->Q.at<float>(1, 0) << " ";
+		std::cout << this->Q.at<float>(1, 1) << std::endl;*/
+		//Release the k.. memory
+		Ui.release();
+		ui.release();
+		P.release();
+
 	}
 
 	//Euclidean distance between 2 points
@@ -823,8 +894,32 @@ namespace MVEE {
 	//Distance between point p and the edge of the elipsoid - alg (45)
 	float imgCrawler::elipsDist(Point p)
 	{
-		float res = -1;
-		return 0.0f;
+
+		//Current Point
+		Mat pk = Mat(2, 1, CV_32F);
+		pk.at<uchar>(0, 0) = p.x;
+		pk.at<uchar>(0, 1) = p.y;
+
+		//Ellipsoid Center - weigted sum of points
+		Mat ci = Mat(2, 1, CV_32F);
+		ci.at<float>(0, 0) = 0;
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			ci.at<float>(0, 0) += this->p[i].x * this->u[i];
+		}
+		ci.at<uchar>(0, 1) = 0;
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			ci.at<float>(0, 1) += this->p[i].y * this->u[i];
+		}
+
+		//Equasion
+
+		Mat tempRes = 2 * ( (pk - ci).t() * this->Q * (pk - ci)) + 1;
+
+		//Release memory
+		pk.release();
+		ci.release();
+
+		return tempRes.at<float>(0,0);
 	}
 
 	//Prints current state - for debugging
@@ -836,9 +931,15 @@ namespace MVEE {
 		std::cout << "Movement Angle:" << this->movementAngle << std::endl;
 		std::cout << "Corner number:" << this->pointArrCounter << std::endl;
 		std::cout << "Corner array size:" << this->pointArrSize << std::endl;
-		for(int i = 0; i<this->pointArrSize; i++)
-			std::cout << "Point " << i << ": " << this->p[i] << std::endl;
-
+		for (int i = 0; i<this->pointArrSize; i++)
+			std::cout << "Point " << i << ": " << this->p[i] << ", " << std::endl;
+		for (int i = 0; i<this->pointArrSize; i++)
+			std::cout << "Weight " << i << ": " << this->u[i] << ", " << std::endl;
+		std::cout << "Q: " << std::endl;
+		std::cout << this->Q.at<float>(0, 0) << " ";
+		std::cout << this->Q.at<float>(0, 1) << std::endl;
+		std::cout << this->Q.at<float>(1, 0) << " ";
+		std::cout << this->Q.at<float>(1, 1) << std::endl;
 	
 	}
 
@@ -851,14 +952,16 @@ namespace MVEE {
 	//General testing
 	void imgCrawler::test()
 	{
-		cv::Mat tempMat;
-		this->image.copyTo(tempMat);
-		for (int i = 0; i < 50; i++) {
-			tempMat.at<uchar>(Point(20, i)) = 125;
-		}
-		cv::namedWindow("test", WINDOW_NORMAL); // Create a window for display.
-		imshow("test", tempMat); // Show our image inside it.
-		waitKey(0); // Wait for a keystroke in the window
+
+		Mat tempMat1 = Mat::zeros(2, 4, CV_32FC1)+1;
+		Mat tempMat2 = Mat::zeros(4, 2, CV_32FC1)+3;
+		std::cout << "here0 - Q: " << this->Q.rows << "x" << this->Q.cols << std::endl;
+		this->Q = tempMat1* tempMat2;
+		std::cout << "here1 - Q: " << this->Q.rows << "x" << this->Q.cols << std::endl;
+		tempMat1.release();
+		tempMat2.release();
+
+
 	}
 
 	//For debuging purposes

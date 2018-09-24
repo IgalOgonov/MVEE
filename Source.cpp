@@ -43,8 +43,8 @@ int main(int argc, char** argv)
 	}*/
 	imgCrwl.setDebug(true);
 	imgCrwl.run(0, 3, 10);
+	//imgCrwl.test();
 	imgCrwl.printState();
-	//imgCrwl.setAngle(Point(85,26),Point(22,44));
 	waitKey(0); // Wait for a keystroke in the window
 	return 0;
 }
