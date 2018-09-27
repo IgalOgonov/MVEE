@@ -42,7 +42,7 @@ int main(int argc, char** argv)
 		cout << endl;
 	}*/
 	imgCrwl.setDebug(true);
-	imgCrwl.run(0, 3, 10);
+	imgCrwl.run(0, 3, 0.01);
 	imgCrwl.test();
 	imgCrwl.printState();
 	waitKey(0); // Wait for a keystroke in the window

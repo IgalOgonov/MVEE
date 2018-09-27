@@ -76,7 +76,7 @@ namespace MVEE {
 	}
 
 	/*The main function. Once it stops, you should have */
-	bool imgCrawler::run(int color, int eps1, int eps2, int x, int y) {
+	bool imgCrawler::run(int color, int eps1, double eps2, int x, int y) {
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
 			return false;
 		if (this->debug) {							//DEBUG
@@ -108,23 +108,29 @@ namespace MVEE {
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
 		double tempAngles[4];											//Find 4 possible angles
 		Point tempPoints[4];											//4 possible points
+		std::vector<float> oldU(this->pointArrCounter,8);				//The old u vector - allocate extra space
 		cv::Mat svdMat;													//Svd each time
+		cv::Mat vMat;
+		cv::Mat dMat;
 		cv::Mat tempMat;												//Only exists for debugging purposes
 		String debugStr = "";											//^
 		int debugCounter = 1;
 
 		bool goOn = true;
 		while (goOn) {
-			
+
 			//Calculate Q
 			this->calcQ();
-
 			//Find 4 directions using svd, and follow them to find the relevant points - all are radians for now
 			svdMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
 			tempAngles[0] = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI;					//Radians begone!
 			tempAngles[1] = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(1, 1)) * 180 / PI;
-			tempAngles[2] = (-tempAngles[0]);
-			tempAngles[3] = (-tempAngles[1]);
+			tempAngles[2] = (tempAngles[0] + 180);
+			if(tempAngles[2] > 180)
+				tempAngles[2] -= 360;
+			tempAngles[3] = (tempAngles[1] + 180);
+			if (tempAngles[3] > 180)
+				tempAngles[3] -= 360;
 
 			//Crawl in each direction, and find the farathest point
 			if (this->debug) {							//DEBUG
@@ -151,11 +157,13 @@ namespace MVEE {
 				this->currLoc.x = this->startingLoc.x;
 				this->currLoc.y = this->startingLoc.y;
 				if (this->debug) {						//DEBUG
-					debugStr = "";
 					drawCross(tempMat, tempPoints[i]);
-					String wName = "Direction " + std::to_string(i) + "_debug";
-					cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-					imshow(wName, tempMat); // Show our image inside it.
+					if (i == 3) {
+						debugStr = "";;
+						String wName = "Direction " + std::to_string(i) + "_debug";
+						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+						imshow(wName, tempMat); // Show our image inside it.
+					}
 				}
 			}
 			if (!goOn)													//It's false only if we failed to get to a border at some point
@@ -174,18 +182,92 @@ namespace MVEE {
 				std::cout << "Farthest point is " << tempPoints[maxIndex] << ", with distance " << maxDist << std::endl;
 				waitKey(0);					// Wait for a keystroke in the window - to close 4 windows
 			}
-
+			
+			//Time to update the points/weights
+			float beta = (maxDist - 3) / ((3) * (maxDist - 1));
+			if (maxDist < 0)
+				break;
+			if (goOn) {
+				int existingIndex = -1;
+				//Update existing weights
+				for (int i = 0; i < this->pointArrCounter; i++) {
+					oldU[i] = this->u[i];
+					this->u[i] *= (1-beta);
+					if (this->p[i].x == tempPoints[maxIndex].x && this->p[i].y == tempPoints[maxIndex].y)
+						existingIndex = i;				//Checks if the current corner point happens to be the max distance point we found
+				}
+				//This is the case where the point we found was already a corner point
+				if (existingIndex != -1) {
+					this->u[existingIndex] += beta;
+				}
+				//This is the case where we found a new point
+				else {
+					oldU[this->pointArrCounter] = 0;
+					this->p[pointArrCounter].x = tempPoints[maxIndex].x;
+					this->p[pointArrCounter].y = tempPoints[maxIndex].y;
+					this->u[pointArrCounter] = beta;
+					this->pointArrCounter++;
+					if ((this->pointArrCounter + 1) == this->pointArrSize) {
+						if (this->debug) {						//DEBUG
+							std::cout << "Expanding array!" << std::endl;
+							this->expandArr();
+						}
+					}
+				}
+			}
 			//Check if the distance between the old and current u is smaller than eps2. If it is, exit
 			float delta = 0;
+			for (int i = 0; i < this->pointArrCounter; i++) {
+				delta += pow((this->u[i]-oldU[i]),2);
+			}			
+			delta = sqrt(delta);
+			
+			if (this->debug)
+				std::cout << "Delta is " << delta << ", epsilon is " << eps2 << std::endl;
+
 			if (delta <= eps2) {
 				goOn = false;
+
 			}
 			else {
 				goOn = true;
 			}
 
 		}
-		
+		//Display the ellipse on the original image
+		dMat = cv::SVD(this->Q, SVD::FULL_UV).w;
+		std::cout << dMat.at<float>(1, 1) << std::endl;
+		cv::Size mainAxes;
+		float rotAngle;
+		Point center = Point(0, 0);
+		float a = 1 / sqrt(dMat.at<float>(0, 0));
+		float b = 1 / sqrt(dMat.at<float>(0, 1));
+		if (a > b) {
+			mainAxes.width = a;
+			mainAxes.height = b;
+		}
+		else {
+			mainAxes.width = b;
+			mainAxes.height = a;
+		} 
+		(a < b) ? 
+			rotAngle = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI :
+			rotAngle = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(1, 1)) * 180 / PI ;
+
+		for (int i = 0; i < this->pointArrCounter; i++) {
+			center.x += this->p[i].x * this->u[i];
+			center.y += this->p[i].y * this->u[i];
+		}
+
+		if (this->debug) {
+			std::cout << "Center:" << center << ", rotAngle: " << rotAngle << ", cvSize "<< a <<"x"<<b<<"|" <<mainAxes.width<< "x"<< mainAxes.height << std::endl;
+		}
+		cv::ellipse(image, center, mainAxes, rotAngle, 0, 360,100,2);
+
+		cv::namedWindow("Final Image", WINDOW_NORMAL); // Create a window for display.
+		imshow("Final Image", image); // Show our image inside it.
+
+		dMat.release();
 		svdMat.release();
 		tempMat.release();
 	}
@@ -756,7 +838,8 @@ namespace MVEE {
 		this->inShape(side2 + 1) ? diag2 = side2 - 1 : diag2 = side2 + 1;
 		if (diag2 == 0)
 			diag2 = 8;
-		std::cout << side1 << "|" << diag1 << "|" << side2 << "|" << diag2 << "|;";
+		if(this->debug)
+			std::cout << side1 << "|" << diag1 << "|" << side2 << "|" << diag2 << "|;";
 
 		//Move to each side, and set the temp locations accordingly. 
 		//Side 1:
@@ -1096,7 +1179,7 @@ namespace MVEE {
 		std::cout << this->Q.at<float>(0, 1) << std::endl;
 		std::cout << this->Q.at<float>(1, 0) << " ";
 		std::cout << this->Q.at<float>(1, 1) << std::endl; */
-		this->Q = this->Q *(1.f / 4);
+		this->Q = this->Q *(1.f / 2);
 		/*std::cout << "Q4: " << std::endl;
 		std::cout << this->Q.at<float>(0, 0) << " ";
 		std::cout << this->Q.at<float>(0, 1) << std::endl;
@@ -1119,29 +1202,25 @@ namespace MVEE {
 	//Distance between point p and the edge of the elipsoid - alg (45)
 	float imgCrawler::elipsDist(Point p)
 	{
-
 		//Current Point
-		Mat pk = Mat(2, 1, CV_32F);
-		pk.at<uchar>(0, 0) = p.x;
-		pk.at<uchar>(0, 1) = p.y;
-
+		Mat pk = Mat::zeros(2, 1, CV_32F);
+		pk.at<float>(0, 0) = p.x;
+		pk.at<float>(1, 0) = p.y;
 		//Ellipsoid Center - weigted sum of points
-		Mat ci = Mat(2, 1, CV_32F);
+		Mat ci = Mat::zeros(2, 1, CV_32F);
 		ci.at<float>(0, 0) = 0;
 		for (int i = 0; i < this->pointArrCounter; i++) {
-			ci.at<float>(0, 0) += this->p[i].x * this->u[i];
+			ci.at<float>(0, 0) += (float)this->p[i].x * (float)this->u[i];
 		}
-		ci.at<uchar>(0, 1) = 0;
+		ci.at<float>(1, 0) = 0;
 		for (int i = 0; i < this->pointArrCounter; i++) {
-			ci.at<float>(0, 1) += this->p[i].y * this->u[i];
+			ci.at<float>(1, 0) += (float)this->p[i].y * (float)this->u[i];
 		}
-
 		//Equasion
-
-		Mat tempRes = 2 * ( (pk - ci).t() * this->Q * (pk - ci)) + 1;
+		Mat tempRes = Mat::zeros(1, 1, CV_32F);
+		tempRes = 2 * ((pk - ci).t() * this->Q * (pk - ci)) + 1;
 
 		float res = tempRes.at<float>(0, 0);
-
 		//Release memory
 		pk.release();
 		ci.release();
@@ -1158,6 +1237,7 @@ namespace MVEE {
 		std::cout << "Movement Angle:" << this->movementAngle << std::endl;
 		std::cout << "Corner number:" << this->pointArrCounter << std::endl;
 		std::cout << "Corner array size:" << this->pointArrSize << std::endl;
+		//std::cout << "Pixels touched:" << this->pointArrSize << std::endl;
 		for (int i = 0; i<this->pointArrSize; i++)
 			std::cout << "Point " << i << ": " << this->p[i] << ", " << std::endl;
 		for (int i = 0; i<this->pointArrSize; i++)
