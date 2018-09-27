@@ -62,6 +62,8 @@ namespace MVEE {
 		bool imgCrawler::run(int color, int eps1, int eps2, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
 		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
 		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
+		bool imgCrawler::jumpToBorder(Mat tempMat = Mat::zeros(1,1,CV_32F));		//Jumps to the shape border from current location - can pain progress on tempMat if it's given.
+		bool imgCrawler::crawlToCorner(Mat tempMat = Mat::zeros(1, 1, CV_32F), bool elipsDist = false);//Crawls to closest corner in the legal directions
 		bool imgCrawler::handleBump();												//Handles line approximation making the shape not convex
 		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));			//Returns true if pointAt(where) is insiide the shape
 		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo

@@ -101,9 +101,87 @@ namespace MVEE {
 		this->movementAngle -= 180;										//Try to find the 4th point
 		if (!this->findCorner(3))
 			return false;
+		//Remember to destroy windows on debug
+		if (this->debug)
+			cv::destroyAllWindows();
+
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
-		//Calculate Q for the first time
-		this->calcQ();
+		double tempAngles[4];											//Find 4 possible angles
+		Point tempPoints[4];											//4 possible points
+		Mat svdMat;														//Svd each time
+		cv::Mat tempMat;												//Only exists for debugging purposes
+		String tempStr = "";											//^
+		int debugCounter = 1;
+
+		bool keepGoing = true;
+		while (keepGoing) {
+			//Calculate Q
+			this->calcQ();
+			//Find 4 directions using svd, and follow them to find the relevant points - all are radians for now
+			svdMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
+			tempAngles[0] = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI;					//Radians begone!
+			tempAngles[1] = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(1, 1)) * 180 / PI;
+			tempAngles[2] = (-tempAngles[0]);
+			tempAngles[3] = (-tempAngles[1]);
+
+			//Crawl in each direction, and find the farathest point
+			if (this->debug) {							//DEBUG
+				std::cout << "Finding farthest point, angles: " << (int)tempAngles[0] << "," << tempAngles[1] << ","  << tempAngles[2] << "," << tempAngles[3] << std::endl;
+				this->image.copyTo(tempMat);
+				tempMat.at<uchar>(this->startingLoc) = 255;
+			}
+
+			for (int i = 0; i < 4; i++) {
+				tempAngles[i] = tempAngles[i];
+				this->movementAngle = tempAngles[i];						//Set angle
+				if (!this->jumpToBorder(tempMat)) {							//Find border
+					keepGoing = false;
+					break;
+				}
+				//Try to crawl to the farthest corner
+				if (!this->crawlToCorner(tempMat,true)) {
+					keepGoing = false;
+					break;
+				}
+				//Update current location
+				tempPoints[i].x = this->currLoc.x;
+				tempPoints[i].y = this->currLoc.y;
+				this->currLoc.x = this->startingLoc.x;
+				this->currLoc.y = this->startingLoc.y;
+				if (this->debug) {						//DEBUG
+					tempStr = "";
+					drawCross(tempMat, tempPoints[i]);
+					String wName = "Direction " + std::to_string(i) + "_debug";
+					cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+					imshow(wName, tempMat); // Show our image inside it.
+				}
+			}
+			if (!keepGoing)													//It's false only if we failed to get to a border at some point
+				break;
+
+			float maxDist = 0;
+			float maxIndex = -1;
+			for (int i = 0; i < 4; i++) {
+				if (this->elipsDist(tempPoints[i]) > maxDist) {
+					maxIndex = i;
+					maxDist = this->elipsDist(tempPoints[i]);
+				}
+			}
+
+			if (this->debug) {
+				waitKey(0);					// Wait for a keystroke in the window - to close 4 windows
+			}
+			//Check if the distance between the old and current u is smaller than eps2. If it is, exit
+			float delta = 0;
+			if (delta <= eps2) {
+				keepGoing = false;
+			}
+			else {
+				keepGoing = true;
+			}
+		}
+
+		svdMat.release();
 	}
 
 	//Search the image for current color. Will search all squares, from the size of the image, n (if it's nxn) down to eps (the smallest shape should enclose an eps x eps square).
@@ -191,28 +269,73 @@ namespace MVEE {
 			this->image.copyTo(tempMat);
 			tempMat.at<uchar>(this->startingLoc) = 255;
 		}
+
+		//Find shape border
+		if (!this->jumpToBorder(tempMat)) {
+			return false;
+		}
+
+		//Now, it's time to crawl along the border until we get to a point where any legal movement brings us closer to the starting point
+		//Get potential legal movement pixels
+
+		
+		//Try to crawl to the farthest corner
+		if (!this->crawlToCorner(tempMat)) {
+			res = false;
+		}
+		//If it worked, update the results
+		else {
+			this->p[num] = this->currLoc;
+			this->u[num] = 1.f / 4;
+			this->pointArrCounter++;
+			if ((this->pointArrCounter + 1) == this->pointArrSize) {
+				if (this->debug) {						//DEBUG
+					std::cout << "Expanding array!";
+					this->expandArr();
+				}
+			}
+			if (this->debug) {						//DEBUG
+				tempStr = "";
+				drawCross(tempMat, this->currLoc);
+				String wName = "Corner_" + std::to_string(num) + "_debug";
+				cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+				imshow(wName, tempMat); // Show our image inside it.
+				waitKey(0); // Wait for a keystroke in the window
+			}
+			res = true;
+		}
+		
+		tempMat.release();
+		return res;
+	}
+
+	bool imgCrawler::jumpToBorder(Mat tempMat)
+	{
 		int bhop = 1;								//This is how much we "hop" each time
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
 		int leftOverX = 0, leftOverY = 0;			//Leftovers we might need to deal with
+		bool toColor = true;
+		if (tempMat.cols == 1 && tempMat.rows == 1)
+			toColor = false;
 
-		this->currLoc  = this->startingLoc;
+		this->currLoc = this->startingLoc;
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
 		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
 			bhop *= 2;
 
 			this->currLoc.x += (int)(bhop*dx);
-			if (bhop*dx - int(bhop*dx) >0.00000001)	
+			if (bhop*dx - int(bhop*dx) >0.00000001)
 				this->currLoc.x += 1; //Round up
 			this->currLoc.y += (int)(bhop*dy);
-			if (bhop*dy - int(bhop*dy) >0.00000001)	
+			if (bhop*dy - int(bhop*dy) >0.00000001)
 				this->currLoc.y += 1; //Round up
 
-			//If we go bellow 0, there will be leftover we need to deal with
+									  //If we go bellow 0, there will be leftover we need to deal with
 			if (this->currLoc.x < 0) {
 				leftOverX = this->currLoc.x;
 				this->currLoc.x = 0;
-				if(this->debug)
+				if (this->debug)
 					std::cout << "Leftovers on axe x:" << leftOverX << std::endl;
 			}
 			if (this->currLoc.y < 0) {
@@ -222,7 +345,7 @@ namespace MVEE {
 					std::cout << "Leftovers on axe y:" << leftOverY << std::endl;
 			}
 
-			if (this->debug) {						//DEBUG
+			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 190;
 			}
 		}
@@ -264,7 +387,7 @@ namespace MVEE {
 
 			}
 
-			if (this->debug) {						//DEBUG
+			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 145;
 			}
 		}
@@ -285,7 +408,7 @@ namespace MVEE {
 					}
 				}
 				//It's possible that we are 2 pixels away due to rounding - then, just go to the nearest border pixel
-				if(tempTry)
+				if (tempTry)
 					for (int i = 1; i < 9; i++) {
 						if (this->checkBorderPoint(this->getPointAt(i))) {
 							this->moveCurrent(i);
@@ -295,57 +418,78 @@ namespace MVEE {
 						}
 					}
 
-				if (this->debug) {
+				if (this->debug && toColor) {
 					tempMat.at<uchar>(this->currLoc) = 145;
 				}
 			}
-		//This means some problem occured
-		if (!this->inShape()) {
-			if (this->debug) {
-				std::cout<< "Unexpected error - could not find near pixel in shape. At pixel "<< this->currLoc << std::endl;
-				String wName = "Corner_" + std::to_string(num) + "_debug";
-				cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-				imshow(wName, tempMat); // Show our image inside it.
-				waitKey(0); // Wait for a keystroke in the window
+			//This means some problem occured
+			if (!this->inShape()) {
+				if (this->debug) {
+					std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << std::endl;
+					if (toColor) {
+					String wName = "Corner_debug";
+					cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+					imshow(wName, tempMat); // Show our image inside it.
+					waitKey(0); // Wait for a keystroke in the window
+					}
+				}
+				tempMat.release();
+				return false;
 			}
-			tempMat.release();
-			return res;
+
+			if (this->debug && toColor) {						//DEBUG
+				tempMat.at<uchar>(this->currLoc) = 145;
+			}
+			
+			//At this point, we are inside the shape
+			return true;
+		}
+	}
+
+	bool imgCrawler::crawlToCorner(Mat tempMat, bool elipsDist)
+	{
+		//Choose the best direction to go, then go in that direction. Repeat until you reached a point where any movement makes you lose distance from the start
+		//Also, account for the fact there might be 2 possible directions, only one of them being a legal one.
+		int dirToGo = 0;		//This represents the direction to go in each round
+		int altDir = 0;			//This is the 2nd poissible direction
+		Point altStart = Point(-1, -1);		//Alternative point to start at
+		float distFromStart;	//This represents the distance of the current point from the start
+		double maxDist = 0;		//This will be the "farthest" possible pixel to go to
+		double tempDist;	//Temporary distance
+		Point tempLoc = Point(-1, -1);	//In case of 2 paths, we will save the first point we reached here to compare
+		bool keepGoing = true;
+		bool res = false;
+		String tempStr;
+		bool toColor = true;
+		if (tempMat.cols == 1 && tempMat.rows == 1)
+			toColor = false;
+		if (!elipsDist) {
+			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
+		}
+		else {
+			distFromStart = this->elipsDist(this->currLoc);
 		}
 
-		if (this->debug) {						//DEBUG
-			tempMat.at<uchar>(this->currLoc) = 145;
-		}
-		//At this point, we are inside the shape
-		}
 
-		//Now, it's time to crawl along the border until we get to a point where any legal movement brings us closer to the starting point
-
-		//Get potential legal movement pixels
 		int* legalPixels = this->getAngleDirections();
 		if (this->debug) {						//DEBUG
 			tempStr = "";
 			for (int i = 0; i < 9; i++)
 				tempStr += std::to_string(legalPixels[i]) + " ";
-			std::cout<< "Legal directions are " << tempStr << std::endl;
+			std::cout << "Legal directions are " << tempStr << std::endl;
 		}
-		//Choose the best direction to go, then go in that direction. Repeat until you reached a point where any movement makes you lose distance from the start
-		//Also, account for the fact there might be 2 possible directions, only one of them being a legal one.
-		int dirToGo = 0;		//This represents the direction to go in each round
-		int altDir = 0;			//This is the 2nd poissible direction
-		Point altStart = Point(-1,-1);		//Alternative point to start at
-		float distFromStart = this->pointDist(this->currLoc, this->startingLoc);	//This represents the distance of the current point from the start
-		double maxDist = 0;		//This will be the "farthest" possible pixel to go to
-		double tempDist;	//Temporary distance
-		Point tempLoc = Point(-1, -1);	//In case of 2 paths, we will save the first point we reached here to compare
-		bool keepGoing = true;
 
 		//Check if there are legal pixels to go to, see if they are farthest, and decide to which to move, but remember - here we might find an alternative location.
 		for (int i = 1; i < 9; i++) {
 			if ((legalPixels[i] != 0) && this->inShape(i) && this->checkBorderPoint(this->getPointAt(i))) {
-				tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
+				if (!elipsDist)
+					tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
+				else {
+					tempDist = this->elipsDist(this->getPointAt(i));
+				}
 				if (tempDist > distFromStart) {
-					if (tempDist > maxDist) { 
-						maxDist = tempDist; 
+					if (tempDist > maxDist) {
+						maxDist = tempDist;
 						altDir = 0;
 						altStart = Point(-1, -1);
 						dirToGo = i;
@@ -364,7 +508,7 @@ namespace MVEE {
 			//Move to the decided pixel.. 
 			if (dirToGo != 0) {
 				this->moveCurrent(dirToGo);
-				if (this->debug) {						//DEBUG
+				if (this->debug && toColor) {						//DEBUG
 					tempMat.at<uchar>(this->currLoc) = 100;
 				}
 			}
@@ -372,33 +516,15 @@ namespace MVEE {
 			else {
 				//This means we just had a small bump to cross
 				if (this->handleBump()) {
-					if (this->debug) {						//DEBUG
+					if (this->debug && toColor) {						//DEBUG
 						tempMat.at<uchar>(this->currLoc) = 175;
 					}
 				}
 				else {
 					//This means we are done, and only went in one direction
 					if (altStart.x == -1 && altStart.y == -1) {
-						this->p[num] = this->currLoc;
-						this->u[num] = 1.f / 4;
-						this->pointArrCounter++;
-						if ((this->pointArrCounter + 1) == this->pointArrSize) {
-							if (this->debug) {						//DEBUG
-								std::cout << "Expanding array!";
-								this->expandArr();
-							}
-						}
-						if (this->debug) {						//DEBUG
-							tempStr = "";
-							this->checkDistNearMe();
-							drawCross(tempMat, this->currLoc);
-							String wName = "Corner_" + std::to_string(num) + "_debug";
-							cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-							imshow(wName, tempMat); // Show our image inside it.
-							waitKey(0); // Wait for a keystroke in the window
-						}
-						keepGoing = false;
 						res = true;
+						keepGoing = false;
 					}
 					//This means there was another direction
 					else {
@@ -415,28 +541,19 @@ namespace MVEE {
 						}
 						//This means we finished the 2nd direction - if the first point is farther than current location, swap them
 						else {
-							if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
-								this->currLoc.x = tempLoc.x;
-								this->currLoc.y = tempLoc.y;
-							}	
-							this->p[num] = this->currLoc;
-							this->u[num] = 1.f / 4;
-							this->pointArrCounter++;
-							if ((this->pointArrCounter + 1) == this->pointArrSize) {
-								if (this->debug) {						//DEBUG
-									std::cout << "Expanding array!";
-									this->expandArr();
+							if (!elipsDist){
+								if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
+									this->currLoc.x = tempLoc.x;
+									this->currLoc.y = tempLoc.y;
 								}
 							}
-							if (this->debug) {						//DEBUG
-								tempStr = "";
-								this->checkDistNearMe();
-								drawCross(tempMat, this->currLoc);
-								String wName = "Corner_" + std::to_string(num) + "_debug";
-								cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-								imshow(wName, tempMat); // Show our image inside it.
-								waitKey(0); // Wait for a keystroke in the window
+							else {
+								if (this->elipsDist(this->currLoc) < this->elipsDist(tempLoc)) {
+									this->currLoc.x = tempLoc.x;
+									this->currLoc.y = tempLoc.y;
+								}
 							}
+
 							keepGoing = false;
 							res = true;
 						}
@@ -446,11 +563,22 @@ namespace MVEE {
 
 			maxDist = 0;
 			dirToGo = 0;
-			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
+			if (!elipsDist) {
+				distFromStart = this->pointDist(this->currLoc, this->startingLoc);
+			}
+			else {
+				distFromStart = this->elipsDist(this->currLoc);
+			}
 			//Check if there are legal pixels to go to, see if they are farthest, and decide to which to mive
 			for (int i = 1; i < 9; i++) {
-				if ( (legalPixels[i] != 0) && this->inShape(i) && this->checkBorderPoint(this->getPointAt(i)) ) {
-					tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
+				if ((legalPixels[i] != 0) && this->inShape(i) && this->checkBorderPoint(this->getPointAt(i))) {
+					if (!elipsDist) {
+						tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
+					}
+					else {
+						tempDist = this->elipsDist(this->getPointAt(i));
+					}
+
 					if (tempDist > distFromStart && tempDist > maxDist) {
 						maxDist = tempDist;
 						dirToGo = i;
@@ -467,8 +595,7 @@ namespace MVEE {
 			}
 
 		}
-		
-		tempMat.release();
+
 		return res;
 	}
 
@@ -915,11 +1042,14 @@ namespace MVEE {
 
 		Mat tempRes = 2 * ( (pk - ci).t() * this->Q * (pk - ci)) + 1;
 
+		float res = tempRes.at<float>(0, 0);
+
 		//Release memory
 		pk.release();
 		ci.release();
+		tempRes.release();
 
-		return tempRes.at<float>(0,0);
+		return res;
 	}
 
 	//Prints current state - for debugging
@@ -952,15 +1082,7 @@ namespace MVEE {
 	//General testing
 	void imgCrawler::test()
 	{
-
-		Mat tempMat1 = Mat::zeros(2, 4, CV_32FC1)+1;
-		Mat tempMat2 = Mat::zeros(4, 2, CV_32FC1)+3;
-		std::cout << "here0 - Q: " << this->Q.rows << "x" << this->Q.cols << std::endl;
-		this->Q = tempMat1* tempMat2;
-		std::cout << "here1 - Q: " << this->Q.rows << "x" << this->Q.cols << std::endl;
-		tempMat1.release();
-		tempMat2.release();
-
+		
 
 	}
 

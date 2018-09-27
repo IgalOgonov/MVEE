@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 	}*/
 	imgCrwl.setDebug(true);
 	imgCrwl.run(0, 3, 10);
-	//imgCrwl.test();
+	imgCrwl.test();
 	imgCrwl.printState();
 	waitKey(0); // Wait for a keystroke in the window
 	return 0;
