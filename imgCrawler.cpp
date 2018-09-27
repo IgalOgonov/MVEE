@@ -82,8 +82,8 @@ namespace MVEE {
 		if (this->debug) {							//DEBUG
 			std::cout << "Starting Point:" << this->startingLoc << std::endl;
 		}
-		cv::Point left(this->startingLoc.x - 1, this->startingLoc.y);
-		cv::Point right(this->startingLoc.x + 1, this->startingLoc.y);
+		Point left(this->startingLoc.x - 1, this->startingLoc.y);
+		Point right(this->startingLoc.x + 1, this->startingLoc.y);
 		this->setAngle(this->startingLoc, left);						//Set movement to the left to find the first point
 		if (!this->findCorner(0))										//Try to find the first point
 			return false;
@@ -104,19 +104,21 @@ namespace MVEE {
 		//Remember to destroy windows on debug
 		if (this->debug)
 			cv::destroyAllWindows();
-
+		
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
 		double tempAngles[4];											//Find 4 possible angles
 		Point tempPoints[4];											//4 possible points
-		Mat svdMat;														//Svd each time
+		cv::Mat svdMat;													//Svd each time
 		cv::Mat tempMat;												//Only exists for debugging purposes
-		String tempStr = "";											//^
+		String debugStr = "";											//^
 		int debugCounter = 1;
 
-		bool keepGoing = true;
-		while (keepGoing) {
+		bool goOn = true;
+		while (goOn) {
+			
 			//Calculate Q
 			this->calcQ();
+
 			//Find 4 directions using svd, and follow them to find the relevant points - all are radians for now
 			svdMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
 			tempAngles[0] = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI;					//Radians begone!
@@ -126,7 +128,7 @@ namespace MVEE {
 
 			//Crawl in each direction, and find the farathest point
 			if (this->debug) {							//DEBUG
-				std::cout << "Finding farthest point, angles: " << (int)tempAngles[0] << "," << tempAngles[1] << ","  << tempAngles[2] << "," << tempAngles[3] << std::endl;
+				std::cout << "Finding farthest point, angles: " << tempAngles[0] << "," << tempAngles[1] << ","  << tempAngles[2] << "," << tempAngles[3] << std::endl;
 				this->image.copyTo(tempMat);
 				tempMat.at<uchar>(this->startingLoc) = 255;
 			}
@@ -135,12 +137,12 @@ namespace MVEE {
 				tempAngles[i] = tempAngles[i];
 				this->movementAngle = tempAngles[i];						//Set angle
 				if (!this->jumpToBorder(tempMat)) {							//Find border
-					keepGoing = false;
+					goOn = false;
 					break;
 				}
 				//Try to crawl to the farthest corner
 				if (!this->crawlToCorner(tempMat,true)) {
-					keepGoing = false;
+					goOn = false;
 					break;
 				}
 				//Update current location
@@ -149,18 +151,18 @@ namespace MVEE {
 				this->currLoc.x = this->startingLoc.x;
 				this->currLoc.y = this->startingLoc.y;
 				if (this->debug) {						//DEBUG
-					tempStr = "";
+					debugStr = "";
 					drawCross(tempMat, tempPoints[i]);
 					String wName = "Direction " + std::to_string(i) + "_debug";
 					cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
 					imshow(wName, tempMat); // Show our image inside it.
 				}
 			}
-			if (!keepGoing)													//It's false only if we failed to get to a border at some point
+			if (!goOn)													//It's false only if we failed to get to a border at some point
 				break;
 
 			float maxDist = 0;
-			float maxIndex = -1;
+			int maxIndex = 0;
 			for (int i = 0; i < 4; i++) {
 				if (this->elipsDist(tempPoints[i]) > maxDist) {
 					maxIndex = i;
@@ -169,19 +171,23 @@ namespace MVEE {
 			}
 
 			if (this->debug) {
+				std::cout << "Farthest point is " << tempPoints[maxIndex] << ", with distance " << maxDist << std::endl;
 				waitKey(0);					// Wait for a keystroke in the window - to close 4 windows
 			}
+
 			//Check if the distance between the old and current u is smaller than eps2. If it is, exit
 			float delta = 0;
 			if (delta <= eps2) {
-				keepGoing = false;
+				goOn = false;
 			}
 			else {
-				keepGoing = true;
+				goOn = true;
 			}
-		}
 
+		}
+		
 		svdMat.release();
+		tempMat.release();
 	}
 
 	//Search the image for current color. Will search all squares, from the size of the image, n (if it's nxn) down to eps (the smallest shape should enclose an eps x eps square).
@@ -274,10 +280,6 @@ namespace MVEE {
 		if (!this->jumpToBorder(tempMat)) {
 			return false;
 		}
-
-		//Now, it's time to crawl along the border until we get to a point where any legal movement brings us closer to the starting point
-		//Get potential legal movement pixels
-
 		
 		//Try to crawl to the farthest corner
 		if (!this->crawlToCorner(tempMat)) {
@@ -312,6 +314,7 @@ namespace MVEE {
 	bool imgCrawler::jumpToBorder(Mat tempMat)
 	{
 		int bhop = 1;								//This is how much we "hop" each time
+		Point prevP;
 		double dx = cos(this->getAngleData(true));	//Delta x
 		double dy = sin(this->getAngleData(true));	//Delta y
 		int leftOverX = 0, leftOverY = 0;			//Leftovers we might need to deal with
@@ -320,8 +323,12 @@ namespace MVEE {
 			toColor = false;
 
 		this->currLoc = this->startingLoc;
+
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
 		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
+			prevP.x = this->currLoc.x;
+			prevP.y = this->currLoc.y;
+
 			bhop *= 2;
 
 			this->currLoc.x += (int)(bhop*dx);
@@ -356,10 +363,20 @@ namespace MVEE {
 			if (this->checkBorderPoint(this->currLoc))
 				break;
 			bhop /= 2;
+			int jumpX = (int)(bhop*dx);
+			int jumpY = (int)(bhop*dy);
+			if (jumpX == 0 && (dx < 0))
+				jumpX = -1;
+			if (jumpX == 0 && (dx > 0))
+				jumpX = 1;
+			if (jumpY == 0 && (dx < 0))
+				jumpY = -1;
+			if (jumpY == 0 && (dx > 0))
+				jumpY = 1;
 
-			if (this->inShape()) {
-				this->currLoc.x += (int)(bhop*dx);
-				this->currLoc.y += (int)(bhop*dy);
+			if (this->inShape(0)) {
+				this->currLoc.x += jumpX;
+				this->currLoc.y += jumpY;
 			}
 			else {
 				//We might have leftover on axe x
@@ -371,7 +388,7 @@ namespace MVEE {
 					}
 				}
 				else {
-					this->currLoc.x -= (int)(bhop*dx);
+					this->currLoc.x -= jumpX;
 				}
 				//We might have leftover on axe y
 				if (leftOverY < 0) {
@@ -382,7 +399,7 @@ namespace MVEE {
 					}
 				}
 				else {
-					this->currLoc.y -= (int)(bhop*dy);
+					this->currLoc.y -= jumpY;
 				}
 
 			}
@@ -393,11 +410,29 @@ namespace MVEE {
 		}
 
 		//Because it is possible to end up just outside the border instead of inside, do a small correction
-		if (!this->inShape()) {
-			this->currLoc.x -= (int)(dx);
-			this->currLoc.y -= (int)(dy);
+		int timeout = 100;
+		while ( !( this->inShape(0) && this->checkBorderPoint(this->currLoc) ) ) {
+			int jumpX = (int)(bhop*dx);
+			int jumpY = (int)(bhop*dy);
+			if (jumpX == 0 && (dx < 0))
+				jumpX = -1;
+			if (jumpX == 0 && (dx > 0))
+				jumpX = 1;
+			if (jumpY == 0 && (dx < 0))
+				jumpY = -1;
+			if (jumpY == 0 && (dx > 0))
+				jumpY = 1;
+
+			if (!this->inShape(0)) {
+				this->currLoc.x -= jumpX;
+				this->currLoc.y -= jumpY;
+			}
+			else {
+				this->currLoc.x += jumpX;
+				this->currLoc.y += jumpY;
+			}
 			//Now, we might still be 1 pixel outside the shape (becaus we rounded down!), so check if we are in and if not, go to a neighbour that's in
-			bool tempTry = !this->inShape();
+			bool tempTry = !this->inShape(0);
 			while (tempTry) {
 				//Check neighbouring pixels, and go to the one that's in the shape and break
 				for (int i = 1; i < 9; i++) {
@@ -422,28 +457,36 @@ namespace MVEE {
 					tempMat.at<uchar>(this->currLoc) = 145;
 				}
 			}
+
 			//This means some problem occured
-			if (!this->inShape()) {
-				if (this->debug) {
-					std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << std::endl;
-					if (toColor) {
-					String wName = "Corner_debug";
-					cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-					imshow(wName, tempMat); // Show our image inside it.
-					waitKey(0); // Wait for a keystroke in the window
+			if (!this->inShape(0)) {
+				timeout -= 1;
+				if (timeout < 1) {
+					if (this->debug) {
+						std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << "dx dy are "<<dx << " " << dy<< std::endl;
+						if (toColor) {
+						String wName = "Corner_debug";
+						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+						imshow(wName, tempMat); // Show our image inside it.
+						waitKey(0); // Wait for a keystroke in the window
+						}
 					}
+					tempMat.release();
+					return false;
 				}
-				tempMat.release();
-				return false;
 			}
 
 			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 145;
 			}
-			
-			//At this point, we are inside the shape
+
+		}
+
+		//At this point, we are inside the shape
+		if (this->inShape(0)) {
 			return true;
 		}
+
 	}
 
 	bool imgCrawler::crawlToCorner(Mat tempMat, bool elipsDist)
@@ -471,7 +514,46 @@ namespace MVEE {
 		}
 
 
-		int* legalPixels = this->getAngleDirections();
+		//int* legalPixels = this->getAngleDirections();
+		//For some reason the pointer was making problems. So, since it only appears here, I'll omit the function and use getAngleDirection here mantually
+		int legalPixels[9] = {};
+		legalPixels[0] = 0;
+		double tempAngle;
+		tempAngle = this->getAngleData(false);																		
+		if (tempAngle < -135 || tempAngle > -45)
+			legalPixels[1] = 1;
+		else
+			legalPixels[1] = 0;
+		if (tempAngle < 180 && tempAngle > -90)
+			legalPixels[2] = 1;
+		else
+			legalPixels[2] = 0;
+		if (tempAngle < 135 && tempAngle > -135)
+			legalPixels[3] = 1;
+		else
+			legalPixels[3] = 0;
+		if (tempAngle < 90 && tempAngle > -180)
+			legalPixels[4] = 1;
+		else
+			legalPixels[4] = 0;
+		if (tempAngle < 45 || tempAngle > 135)
+			legalPixels[5] = 1;
+		else
+			legalPixels[5] = 0;
+		if (tempAngle < 0 || tempAngle > 90)
+			legalPixels[6] = 1;
+		else
+			legalPixels[6] = 0;
+		if (tempAngle < -45 || tempAngle > 45)
+			legalPixels[7] = 1;
+		else
+			legalPixels[7] = 0;
+		if (tempAngle < -90 || tempAngle > 0)
+			legalPixels[8] = 1;
+		else
+			legalPixels[8] = 0;
+
+
 		if (this->debug) {						//DEBUG
 			tempStr = "";
 			for (int i = 0; i < 9; i++)
@@ -515,7 +597,7 @@ namespace MVEE {
 			//..or stop and declare current position as the corner we seek - and potentially switch to the other potential path
 			else {
 				//This means we just had a small bump to cross
-				if (this->handleBump()) {
+				if (this->handleBump(elipsDist)) {
 					if (this->debug && toColor) {						//DEBUG
 						tempMat.at<uchar>(this->currLoc) = 175;
 					}
@@ -601,11 +683,11 @@ namespace MVEE {
 
 	//Part of findCorner. Detects possible "bump" - an incorrect detection of corner due to the shape being an approximate convex one and not really convex.
 	//Handles the case where we are stuck on a corner while we should have continued, or where we are stuck on flat line that we should have travarsed because it represents an angle.
-	bool imgCrawler::handleBump()
+	bool imgCrawler::handleBump(bool elipsDist)
 	{
 		int botDir = 0;														//Our relative "bottom"
 		int side1 = 0, side2 = 0, diag1 = 0, diag2 = 0, upSide = 0;			//The sides in which we should move, the diagonal, and which side contains the "jump up"
-		float initDist = this->pointDist(this->currLoc, this->startingLoc);	//Initial distance
+		float initDist;														//Initial distance
 		float dist1, dist2;
 		bool earlyReturn = false;
 		Point tempLocA = Point(-1, -1);
@@ -613,6 +695,12 @@ namespace MVEE {
 		Point tempLocC = Point(-1, -1);
 		if (this->debug) {		//Debug
 			std::cout << "Bump@ " << this->currLoc << ", ";
+		}
+		if (!elipsDist) {
+			initDist = this->pointDist(this->currLoc, this->startingLoc);
+		}
+		else {
+			initDist = this->elipsDist(this->currLoc);
 		}
 		//Find out our relative "down" direction. Remember that if we really are stuck on a bump, there has to be one and only one.
 		if (!this->inShape(8) && !this->inShape(1) && !this->inShape(2))
@@ -678,7 +766,12 @@ namespace MVEE {
 		while (this->inShape(side1)) {
 			this->moveCurrent(side1);
 		}
-		dist1 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+		if (!elipsDist) {
+			dist1 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+		}
+		else {
+			dist1 = this->elipsDist(this->currLoc);
+		}
 		//Swap locations - I know it could be done a bit pretteir, but Im way past wasting even moment on this
 		tempLocB.x = this->currLoc.x;
 		tempLocB.y = this->currLoc.y;
@@ -699,7 +792,12 @@ namespace MVEE {
 		}
 		else {
 			this->moveCurrent(diag2);
-			dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+			if (!elipsDist) {
+				dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
+			}
+			else {
+				dist2 = this->elipsDist(this->currLoc);
+			}
 		}
 		tempLocC.x = this->currLoc.x;
 		tempLocC.y = this->currLoc.y;
@@ -1048,7 +1146,6 @@ namespace MVEE {
 		pk.release();
 		ci.release();
 		tempRes.release();
-
 		return res;
 	}
 
