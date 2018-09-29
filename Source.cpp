@@ -13,7 +13,7 @@ int main(int argc, char** argv)
 	double eps2 = 0.08;
 	bool debug = false;
 	int color = 0;
-	if ( (argc < 2) || (argc > 5))
+	if ( (argc < 2) || (argc > 6))
 	{
 		cout << " Usage: imgCrawler.exe ImageToLoadAndDisplay [0 < eps1 < 1,000,000] [0.00 < eps2 < 1.00] [debug = 0|1] [0<=color<=255]" << endl;
 		return -1;
