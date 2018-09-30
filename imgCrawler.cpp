@@ -76,7 +76,10 @@ namespace MVEE {
 	}
 
 	/*The main function. Once it stops, you should have */
-	bool imgCrawler::run(int color, int eps1, double eps2, int x, int y) {
+	bool imgCrawler::run(int color, int eps1, double eps2, long timeLimit, int x, int y) {
+		long startTime, currTime;
+		startTime = std::chrono::duration_cast<milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
 			return false;
 		if (this->debug) {							//DEBUG
@@ -225,6 +228,7 @@ namespace MVEE {
 			if (this->debug)
 				std::cout << "Delta is " << delta << ", epsilon is " << eps2 << std::endl;
 
+			//Compare delta to eps2
 			if (delta <= eps2) {
 				goOn = false;
 
@@ -233,6 +237,14 @@ namespace MVEE {
 				goOn = true;
 			}
 
+			//Compare time passed if need be
+			currTime = std::chrono::duration_cast<milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			if (timeLimit > 0 && !this->debug) {
+				if (currTime - startTime > timeLimit)
+					goOn = false;
+			}
+			else if (this->debug)
+				std::cout << "timeLimit does not work in debug mode!" << std::endl;
 		}
 		//Display the ellipse on the original image
 		dMat = cv::SVD(this->Q, SVD::FULL_UV).w;
