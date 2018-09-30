@@ -1,3 +1,5 @@
+/*VERSION 0.1.0.2*/
+
 #pragma once
 #ifndef MVEE_IMGCRAWLER_H
 #define MVEE_IMGCRAWLER_H
