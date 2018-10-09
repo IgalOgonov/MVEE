@@ -68,25 +68,27 @@ namespace MVEE {
 		bool imgCrawler::run(int color, int eps1, double eps2, long timeLimit, int x = 0, int y = 0);	//Runes the algorithm with color being 0-255 color of our shape, eps1 being smallest square to search, eps2 from the alg. 
 		bool imgCrawler::findStartPoint(int color, int eps, int x = 0, int y = 0);	//Finds starting point to run from in the picture. 
 		bool imgCrawler::findCorner(int num);										//Finds corner from starting point. Will place it into index num in the point array.
-		bool imgCrawler::jumpToBorder(Mat tempMat = Mat::zeros(1,1,CV_32F));		//Jumps to the shape border from current location - can pain progress on tempMat if it's given.
+		bool imgCrawler::jumpToBorder(Mat tempMat = Mat::zeros(1,1,CV_32F), bool ellipseBorder = false);		//Jumps to the shape border from current location - can pain progress on tempMat if it's given.
 		bool imgCrawler::crawlToCorner(Mat tempMat = Mat::zeros(1, 1, CV_32F), bool elipsDist = false);//Crawls to closest corner in the legal directions
 		bool imgCrawler::handleBump(bool elipsDist = false);						//Handles line approximation making the shape not convex
 		bool imgCrawler::inShape(int where = 0, Point p = Point(-1,-1));			//Returns true if pointAt(where) is insiide the shape
 		bool imgCrawler::moveCurrent(int whereTo);									//Moves current location to WhereTo
 		Point imgCrawler::getPointAt(int whereTo = 0, Point start = Point(-1, -1));	//Gets the point relative to current location
 		bool imgCrawler::checkPointLegal(Point p);									//Checks if a point is within matrix boundries
-		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1));					//Checks if a point is a border point
+		bool imgCrawler::checkBorderPoint(Point p = Point(-1,-1), bool ellipse = false);//Checks if a point is a border point
 		int* imgCrawler::getAngleDirections(int angle = 361);						//Helper function that returns an array of legal directions depending on the current angle
 		double getAngleData(bool convertToRad = true);								//Helper function that returns current angle - converts it to radians by defult.
 		void imgCrawler::expandArr();													//Expands dynamic array P
 		void imgCrawler::calcQ();													//Calculates Q
 		float imgCrawler::pointDist(Point p1, Point p2);							//Returns distance between points.
-		float imgCrawler::elipsDist(Point p);										//Returns distance from point p to the  ellipsoid.
+		float imgCrawler::ellipseDist(Point p);										//Returns distance from point p to the  ellipsoid.
 		void imgCrawler::printState();												//Prints current state of the crawler.
 		void imgCrawler::setDebug(bool val);										//Sets the crawler into debug mode.
 		/*int* getApproxArray();*/
 		void imgCrawler::test();													//General testing
 		void imgCrawler::drawCross(cv::Mat image, Point p);							//Debugging
+		void imgCrawler::slowEllipseDraw(int color = 100);							//Slow and innacurate drawing of the ellipsoid
+		void imgCrawler::drawNearbyEllipse(int color = 100, int counter = 0);						//Recursive function to draw nearby elipse pixels
 		float* imgCrawler::checkDistNearMe(bool onlyBorder = true, bool onlyInShape = true, bool toPrint = true);
 	};
 

@@ -178,9 +178,9 @@ namespace MVEE {
 			maxDist = 0;
 			maxIndex = 0;
 			for (int i = 0; i < 4; i++) {
-				if (this->elipsDist(tempPoints[i]) > maxDist) {
+				if (this->ellipseDist(tempPoints[i]) > maxDist) {
 					maxIndex = i;
-					maxDist = this->elipsDist(tempPoints[i]);
+					maxDist = this->ellipseDist(tempPoints[i]);
 				}
 			}
 
@@ -292,13 +292,13 @@ namespace MVEE {
 		if (this->debug) {
 			std::cout << "Center:" << center << ", rotAngle: " << rotAngle << ", cvSize "<< a <<"x"<<b<<"|" <<mainAxes.width<< "x"<< mainAxes.height << std::endl;
 		}
-		cv::ellipse(this->image, center, mainAxes, rotAngle, 0, 360,100,1);
-
+		//cv::ellipse(this->image, center, mainAxes, rotAngle, 0, 360,100,1);
+		this->slowEllipseDraw();
 		cv::namedWindow("Final Image", WINDOW_NORMAL); // Create a window for display.
 		imshow("Final Image", this->image); // Show our image inside it.
 		if(this->debug)
 			for (int i = 0; i < this->pointArrCounter; i++) {
-				std::cout << "Distance of point " << this->p[i] << " is " << this->elipsDist(this->p[i]) <<std::endl;
+				std::cout << "Distance of point " << this->p[i] << " is " << this->ellipseDist(this->p[i]) <<std::endl;
 			}
 		dMat.release();
 		uMat.release();
@@ -428,7 +428,7 @@ namespace MVEE {
 		return res;
 	}
 
-	bool imgCrawler::jumpToBorder(Mat tempMat)
+	bool imgCrawler::jumpToBorder(Mat tempMat, bool ellipseBorder)
 	{
 		int bhop = 1;								//This is how much we "hop" each time
 		Point prevP;
@@ -442,7 +442,8 @@ namespace MVEE {
 		this->currLoc = this->startingLoc;
 
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
-		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
+		bool keepJumping = true;
+		while (keepJumping) {
 			prevP.x = this->currLoc.x;
 			prevP.y = this->currLoc.y;
 
@@ -472,12 +473,17 @@ namespace MVEE {
 			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 190;
 			}
+
+			if (ellipseBorder)
+				keepJumping = this->ellipseDist(this->currLoc) < 3;
+			else
+				keepJumping = this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2);
 		}
 
 		//Once we leave the shape, return back in with jumps becoming x2 smaller each time
 		while (bhop > 1) {
 			//If we are at the border, we can exit - it will get fixed in the next step anyway.
-			if (this->checkBorderPoint(this->currLoc))
+			if (this->checkBorderPoint(this->currLoc), ellipseBorder)
 				break;
 			bhop /= 2;
 			int jumpX = (int)(bhop*dx);
@@ -528,7 +534,12 @@ namespace MVEE {
 
 		//Because it is possible to end up just outside the border instead of inside, do a small correction
 		int timeout = 100;
-		while ( !( this->inShape(0) && this->checkBorderPoint(this->currLoc) ) ) {
+		if (ellipseBorder)
+			keepJumping = (this->ellipseDist(this->currLoc) > 3) && this->checkBorderPoint(this->currLoc,true);
+		else
+			keepJumping = !(this->inShape(0) && this->checkBorderPoint(this->currLoc));
+
+		while (keepJumping) {
 			int jumpX = (int)(bhop*dx);
 			int jumpY = (int)(bhop*dy);
 			if (jumpX == 0 && (dx < 0))
@@ -576,12 +587,14 @@ namespace MVEE {
 			}
 
 			//This means some problem occured
-			if (!this->inShape(0)) {
+			bool problem = false;
+			ellipseBorder ? problem = (this->ellipseDist(this->currLoc) > 3) : problem = !this->inShape(0);
+			if (problem) {
 				timeout -= 1;
 				if (timeout < 1) {
 					if (this->debug) {
 						std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << "dx dy are "<<dx << " " << dy<< std::endl;
-						if (toColor) {
+						if (toColor && !ellipseBorder) {
 						String wName = "Corner_debug";
 						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
 						imshow(wName, tempMat); // Show our image inside it.
@@ -593,10 +606,14 @@ namespace MVEE {
 				}
 			}
 
-			if (this->debug && toColor) {						//DEBUG
+			if (this->debug && toColor && !ellipseBorder) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 145;
 			}
 
+			if (ellipseBorder)
+				keepJumping = (this->ellipseDist(this->currLoc) > 3) && this->checkBorderPoint(this->currLoc, true);
+			else
+				keepJumping = !(this->inShape(0) && this->checkBorderPoint(this->currLoc));
 		}
 
 		//At this point, we are inside the shape
@@ -627,7 +644,7 @@ namespace MVEE {
 			distFromStart = this->pointDist(this->currLoc, this->startingLoc);
 		}
 		else {
-			distFromStart = this->elipsDist(this->currLoc);
+			distFromStart = this->ellipseDist(this->currLoc);
 		}
 
 
@@ -684,7 +701,7 @@ namespace MVEE {
 				if (!elipsDist)
 					tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
 				else {
-					tempDist = this->elipsDist(this->getPointAt(i));
+					tempDist = this->ellipseDist(this->getPointAt(i));
 				}
 				if (tempDist > distFromStart) {
 					if (tempDist > maxDist) {
@@ -747,7 +764,7 @@ namespace MVEE {
 								}
 							}
 							else {
-								if (this->elipsDist(this->currLoc) < this->elipsDist(tempLoc)) {
+								if (this->ellipseDist(this->currLoc) < this->ellipseDist(tempLoc)) {
 									this->currLoc.x = tempLoc.x;
 									this->currLoc.y = tempLoc.y;
 								}
@@ -766,7 +783,7 @@ namespace MVEE {
 				distFromStart = this->pointDist(this->currLoc, this->startingLoc);
 			}
 			else {
-				distFromStart = this->elipsDist(this->currLoc);
+				distFromStart = this->ellipseDist(this->currLoc);
 			}
 			//Check if there are legal pixels to go to, see if they are farthest, and decide to which to mive
 			for (int i = 1; i < 9; i++) {
@@ -775,7 +792,7 @@ namespace MVEE {
 						tempDist = this->pointDist(this->getPointAt(i), this->startingLoc);
 					}
 					else {
-						tempDist = this->elipsDist(this->getPointAt(i));
+						tempDist = this->ellipseDist(this->getPointAt(i));
 					}
 
 					if (tempDist > distFromStart && tempDist > maxDist) {
@@ -817,7 +834,7 @@ namespace MVEE {
 			initDist = this->pointDist(this->currLoc, this->startingLoc);
 		}
 		else {
-			initDist = this->elipsDist(this->currLoc);
+			initDist = this->ellipseDist(this->currLoc);
 		}
 		//Find out our relative "down" direction. Remember that if we really are stuck on a bump, there has to be one and only one.
 		if (!this->inShape(8) && !this->inShape(1) && !this->inShape(2))
@@ -888,7 +905,7 @@ namespace MVEE {
 			dist1 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
 		}
 		else {
-			dist1 = this->elipsDist(this->currLoc);
+			dist1 = this->ellipseDist(this->currLoc);
 		}
 		//Swap locations - I know it could be done a bit pretteir, but Im way past wasting even moment on this
 		tempLocB.x = this->currLoc.x;
@@ -914,7 +931,7 @@ namespace MVEE {
 				dist2 = this->pointDist(this->currLoc, this->startingLoc);	//Save the distance
 			}
 			else {
-				dist2 = this->elipsDist(this->currLoc);
+				dist2 = this->ellipseDist(this->currLoc);
 			}
 		}
 		tempLocC.x = this->currLoc.x;
@@ -1058,18 +1075,39 @@ namespace MVEE {
 			return true;
 	}
 	//Returns true if a point is a border point - aka one of its neighboring pixels is of a different color.
-	bool imgCrawler::checkBorderPoint(Point p)
+	bool imgCrawler::checkBorderPoint(Point p, bool ellipse)
 	{
 		//Default point is current location
 		if (p.x < 0 || p.y < 0)
 			return false;
 		bool res = false;
-		bool expectedRes;																		//False if selected point is inside the shape, true otherwise.
-		this->image.at<uchar>(p) == this->color ? expectedRes = false : expectedRes = true;
+		bool expectedRes;																		
+		//False if selected point is inside the shape, true otherwise.
+		if(!ellipse)
+			this->image.at<uchar>(p) == this->color ? expectedRes = false : expectedRes = true;
+		else
+			this->ellipseDist(p) < 3 ? expectedRes = false : expectedRes = true;
+		//Check surrounding points
 		for (int i = 1; i < 9; i++) {
-			if (this->inShape(i, p) == expectedRes) {
-				res = true;
-				break;
+			if (!ellipse) {
+				if (this->inShape(i, p) == expectedRes) {
+					res = true;
+					break;
+				}
+			}
+			else {
+				if (this->ellipseDist(this->getPointAt(i,p)) < 3) {
+					if (expectedRes) {
+						res = true;
+						break;
+					}
+				}
+				else {
+					if (!expectedRes) {
+						res = true;
+						break;
+					}
+				}
 			}
 		}
 		return res;
@@ -1233,7 +1271,7 @@ namespace MVEE {
 	}
 
 	//Distance between point p and the edge of the elipsoid - alg (45)
-	float imgCrawler::elipsDist(Point p)
+	float imgCrawler::ellipseDist(Point p)
 	{
 		//Current Point
 		Mat pk = Mat::zeros(2, 1, CV_32F);
@@ -1304,6 +1342,50 @@ namespace MVEE {
 		image.at<uchar>(this->getPointAt(3, p)) = 25;
 		image.at<uchar>(this->getPointAt(5, p)) = 25;
 		image.at<uchar>(this->getPointAt(7, p)) = 25;
+	}
+
+	//Goes over all pixels in the image.
+	//If a pixel is outside the elipse but one of the pixels near it is inside the ellipse, colors it
+	void imgCrawler::slowEllipseDraw(int color){
+		std::cout << "Drawing Ellipse!"<<std::endl;
+		this->currLoc.x = this->startingLoc.x;
+		this->currLoc.y = this->startingLoc.y;
+		this->movementAngle = 0;
+		if (this->jumpToBorder(Mat::zeros(1, 1, CV_32F), true)) {
+			if(this->debug)
+				std::cout << "Ellipse border point: " <<this->currLoc<< std::endl;
+			for (int i = 1; i < 9; i++) {
+				if (this->checkBorderPoint(this->getPointAt(i), true) &&
+					this->ellipseDist(this->getPointAt(i)) > 3) {
+					if (this->debug)
+						std::cout << "Ellipse border moving in direction " << i << std::endl;
+						this->moveCurrent(i);
+						break;
+				}
+			}
+			this->drawNearbyEllipse(color,0);
+		}
+	}
+
+	//Recursively draws nearby border ellipse pixels
+	void imgCrawler::drawNearbyEllipse(int color, int counter){
+		int moveTo = 0;
+		for (int i = 1; i < 9; i++) {
+			if (this->checkBorderPoint(this->getPointAt(i), true) &&
+				this->ellipseDist(this->getPointAt(i)) > 3 && 
+				this->image.at<uchar>(this->getPointAt(i)) != color) {
+				if (moveTo == 0)
+					moveTo = i;
+				this->image.at<uchar>(this->getPointAt(i)) = color;
+			}
+		}
+		this->moveCurrent(moveTo);
+		if (moveTo != 0)
+			imgCrawler::drawNearbyEllipse(color, counter+1);
+		else {  
+			if (this->debug)
+				std::cout << "Stopped after drawing " << counter << " pixels at " <<this->currLoc <<std::endl;
+		}
 	}
 
 	//Returns an array of the distances of all points near you from the start
