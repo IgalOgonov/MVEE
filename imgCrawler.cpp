@@ -1348,43 +1348,62 @@ namespace MVEE {
 	//If a pixel is outside the elipse but one of the pixels near it is inside the ellipse, colors it
 	void imgCrawler::slowEllipseDraw(int color){
 		std::cout << "Drawing Ellipse!"<<std::endl;
+		/*	for (int i = 1; i < this->image.cols; i++) {
+			for (int j = 1; j < this->image.rows; j++) {
+				if (this->checkBorderPoint(Point(i, j), true))
+					this->image.at<uchar>(Point(i, j)) = 100;
+			}
+		}		*/
+
+
 		this->currLoc.x = this->startingLoc.x;
 		this->currLoc.y = this->startingLoc.y;
-		this->movementAngle = 0;
-		if (this->jumpToBorder(Mat::zeros(1, 1, CV_32F), true)) {
-			if(this->debug)
-				std::cout << "Ellipse border point: " <<this->currLoc<< std::endl;
-			for (int i = 1; i < 9; i++) {
-				if (this->checkBorderPoint(this->getPointAt(i), true) &&
-					this->ellipseDist(this->getPointAt(i)) > 3) {
-					if (this->debug)
-						std::cout << "Ellipse border moving in direction " << i << std::endl;
-						this->moveCurrent(i);
-						break;
+		int i = 0;
+		while (i < 4) {
+			while (!this->checkBorderPoint(this->currLoc, true) && this->currLoc.x > 2 && this->currLoc.x < this->image.rows - 2
+				&& this->currLoc.y > 2 && this->currLoc.y < this->image.cols -2) {
+				switch (i) {
+				case 0:
+					this->currLoc.x += 1;
+					break;
+				case 1:
+					this->currLoc.x -= 1;
+					break;
+				case 2:
+					this->currLoc.y += 1;
+					break;
+				case 3:
+					this->currLoc.y -= 1;
+					break;
 				}
+				this->checkBorderPoint(this->currLoc, true) ? i = 5 : i++;
 			}
-			this->drawNearbyEllipse(color,0);
+			if (i != 5) {
+				this->currLoc.x = this->startingLoc.x;
+				this->currLoc.y = this->startingLoc.y;
+			}
 		}
+		//this->jumpToBorder(Mat::zeros(1, 1, CV_32F), true); 
+		if(this->debug)
+			std::cout << "Ellipse border point: " <<this->currLoc<< " with distance "<<this->ellipseDist(this->currLoc)<< std::endl;
+		if(i==5)
+			this->drawNearbyEllipse(this->currLoc,color);		
+			
+
 	}
 
 	//Recursively draws nearby border ellipse pixels
-	void imgCrawler::drawNearbyEllipse(int color, int counter){
-		int moveTo = 0;
+	void imgCrawler::drawNearbyEllipse(Point p, int color){
+		if (this->ellipseDist(p) > 3 &&
+			this->image.at<uchar>(p) != color &&
+			this->checkBorderPoint(p, true))
+		this->image.at<uchar>(p) = color;
+
 		for (int i = 1; i < 9; i++) {
-			if (this->checkBorderPoint(this->getPointAt(i), true) &&
-				this->ellipseDist(this->getPointAt(i)) > 3 && 
-				this->image.at<uchar>(this->getPointAt(i)) != color) {
-				if (moveTo == 0)
-					moveTo = i;
-				this->image.at<uchar>(this->getPointAt(i)) = color;
-			}
-		}
-		this->moveCurrent(moveTo);
-		if (moveTo != 0)
-			imgCrawler::drawNearbyEllipse(color, counter+1);
-		else {  
-			if (this->debug)
-				std::cout << "Stopped after drawing " << counter << " pixels at " <<this->currLoc <<std::endl;
+			if (this->checkBorderPoint(this->getPointAt(i, p), true) &&
+				this->ellipseDist(this->getPointAt(i, p)) > 3 &&
+				this->image.at<uchar>(this->getPointAt(i, p)) != color)
+			this->drawNearbyEllipse(this->getPointAt(i, p), color);
 		}
 	}
 

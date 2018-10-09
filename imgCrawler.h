@@ -88,7 +88,7 @@ namespace MVEE {
 		void imgCrawler::test();													//General testing
 		void imgCrawler::drawCross(cv::Mat image, Point p);							//Debugging
 		void imgCrawler::slowEllipseDraw(int color = 100);							//Slow and innacurate drawing of the ellipsoid
-		void imgCrawler::drawNearbyEllipse(int color = 100, int counter = 0);						//Recursive function to draw nearby elipse pixels
+		void imgCrawler::drawNearbyEllipse(Point p, int color);						//Recursive function to draw nearby elipse pixels
 		float* imgCrawler::checkDistNearMe(bool onlyBorder = true, bool onlyInShape = true, bool toPrint = true);
 	};
 
