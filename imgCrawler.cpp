@@ -254,6 +254,8 @@ namespace MVEE {
 		Point center = Point(0, 0);
 		float a = 1 / sqrt(dMat.at<float>(0, 0));
 		float b = 1 / sqrt(dMat.at<float>(0, 1));
+		a *= 1 + eps2;//Scale a and b by eps2
+		b *= 1 + eps2; 
 		if (a > b) {
 			mainAxes.width = a;
 			mainAxes.height = b;
