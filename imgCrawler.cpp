@@ -78,6 +78,8 @@ namespace MVEE {
 	/*The main function. Once it stops, you should have */
 	bool imgCrawler::run(int color, int eps1, double eps2, long timeLimit, int x, int y) {
 		long startTime, currTime;
+		float maxDist;
+		int maxIndex;
 		startTime = std::chrono::duration_cast<milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
 		if (!this->findStartPoint(color, eps1, x, y))			//Find the first pixel of existing color
@@ -127,8 +129,8 @@ namespace MVEE {
 			this->calcQ();
 			//Find 4 directions using svd, and follow them to find the relevant points - all are radians for now
 			svdMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
-			tempAngles[0] = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI;					//Radians begone!
-			tempAngles[1] = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(1, 1)) * 180 / PI;
+			tempAngles[0] = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(0, 0)) * 180 / PI;					//Radians begone!
+			tempAngles[1] = atan2(svdMat.at<float>(1, 1), svdMat.at<float>(1, 0)) * 180 / PI;
 			tempAngles[2] = (tempAngles[0] + 180);
 			if(tempAngles[2] > 180)
 				tempAngles[2] -= 360;
@@ -173,8 +175,8 @@ namespace MVEE {
 			if (!goOn)													//It's false only if we failed to get to a border at some point
 				break;
 
-			float maxDist = 0;
-			int maxIndex = 0;
+			maxDist = 0;
+			maxIndex = 0;
 			for (int i = 0; i < 4; i++) {
 				if (this->elipsDist(tempPoints[i]) > maxDist) {
 					maxIndex = i;
@@ -247,16 +249,21 @@ namespace MVEE {
 			else if (this->debug)
 				std::cout << "timeLimit does not work in debug mode!" << std::endl;
 		}
-		//Scale Q by eps2
+		this->calcQ();
+
+		//Scale Q by eps2 until the farthest point we found so far is inside the ellipse
 		dMat = cv::Mat::zeros(2,2,CV_32F);
 		dMat.at<float>(0, 0) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 0);
 		dMat.at<float>(1, 1) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 1);
 		vMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
 		uMat = cv::SVD(this->Q, SVD::FULL_UV).u;
-		float a = 1 / sqrt(dMat.at<float>(0, 0)) * (1 + eps2);
-		float b = 1 / sqrt(dMat.at<float>(1, 1)) * (1 + eps2);
+		//Increase a and b until the farthest point we found 
+		float a = 1 / sqrt(dMat.at<float>(0, 0));
+		a *= (1 + eps2);
+		float b = 1 / sqrt(dMat.at<float>(1, 1));
+		b *= (1 + eps2);
 		dMat.at<float>(0, 0) = 1 / pow(a, 2);
-		dMat.at<float>(1, 1) = 1 / pow(a, 2);
+		dMat.at<float>(1, 1) = 1 / pow(b, 2);
 		this->Q = uMat * dMat * vMat;
 
 		//Display the ellipse on the original image
@@ -273,8 +280,9 @@ namespace MVEE {
 			mainAxes.height = a;
 		} 
 		(a < b) ? 
-			rotAngle = atan2(svdMat.at<float>(0, 0), svdMat.at<float>(1, 0)) * 180 / PI :
-			rotAngle = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(1, 1)) * 180 / PI ;
+			rotAngle = atan2(vMat.at<float>(1, 1), vMat.at<float>(1, 0)) * 180 / PI :
+			rotAngle = atan2(vMat.at<float>(0, 1), vMat.at<float>(0, 0)) * 180 / PI ;
+
 
 		for (int i = 0; i < this->pointArrCounter; i++) {
 			center.x += this->p[i].x * this->u[i];
@@ -284,11 +292,14 @@ namespace MVEE {
 		if (this->debug) {
 			std::cout << "Center:" << center << ", rotAngle: " << rotAngle << ", cvSize "<< a <<"x"<<b<<"|" <<mainAxes.width<< "x"<< mainAxes.height << std::endl;
 		}
-		cv::ellipse(image, center, mainAxes, rotAngle, 0, 360,100,2);
+		cv::ellipse(this->image, center, mainAxes, rotAngle, 0, 360,100,1);
 
 		cv::namedWindow("Final Image", WINDOW_NORMAL); // Create a window for display.
-		imshow("Final Image", image); // Show our image inside it.
-
+		imshow("Final Image", this->image); // Show our image inside it.
+		if(this->debug)
+			for (int i = 0; i < this->pointArrCounter; i++) {
+				std::cout << "Distance of point " << this->p[i] << " is " << this->elipsDist(this->p[i]) <<std::endl;
+			}
 		dMat.release();
 		uMat.release();
 		vMat.release();
@@ -1232,11 +1243,11 @@ namespace MVEE {
 		Mat ci = Mat::zeros(2, 1, CV_32F);
 		ci.at<float>(0, 0) = 0;
 		for (int i = 0; i < this->pointArrCounter; i++) {
-			ci.at<float>(0, 0) += (float)this->p[i].x * (float)this->u[i];
+			ci.at<float>(0, 0) += this->p[i].x * this->u[i];
 		}
 		ci.at<float>(1, 0) = 0;
 		for (int i = 0; i < this->pointArrCounter; i++) {
-			ci.at<float>(1, 0) += (float)this->p[i].y * (float)this->u[i];
+			ci.at<float>(1, 0) += this->p[i].y * this->u[i];
 		}
 		//Equasion
 		Mat tempRes = Mat::zeros(1, 1, CV_32F);
