@@ -14,7 +14,7 @@ namespace MVEE {
 		this->startingLoc = Point(0, 0);
 		this->pointArrSize = 4;
 		this->pointArrCounter = 0;
-		this->debugCounter = 0;
+		this->pixelCounter = 0;
 														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
 														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
 		this->p = new Point[this->pointArrSize];
@@ -115,6 +115,7 @@ namespace MVEE {
 		cv::Mat svdMat;													//Svd each time
 		cv::Mat vMat;
 		cv::Mat dMat;
+		cv::Mat uMat;
 		cv::Mat tempMat;												//Only exists for debugging purposes
 		String debugStr = "";											//^
 		int debugCounter = 1;
@@ -246,16 +247,23 @@ namespace MVEE {
 			else if (this->debug)
 				std::cout << "timeLimit does not work in debug mode!" << std::endl;
 		}
+		//Scale Q by eps2
+		dMat = cv::Mat::zeros(2,2,CV_32F);
+		dMat.at<float>(0, 0) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 0);
+		dMat.at<float>(1, 1) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 1);
+		vMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
+		uMat = cv::SVD(this->Q, SVD::FULL_UV).u;
+		float a = 1 / sqrt(dMat.at<float>(0, 0)) * (1 + eps2);
+		float b = 1 / sqrt(dMat.at<float>(1, 1)) * (1 + eps2);
+		dMat.at<float>(0, 0) = 1 / pow(a, 2);
+		dMat.at<float>(1, 1) = 1 / pow(a, 2);
+		this->Q = uMat * dMat * vMat;
+
 		//Display the ellipse on the original image
-		dMat = cv::SVD(this->Q, SVD::FULL_UV).w;
-		std::cout << dMat.at<float>(1, 1) << std::endl;
+
 		cv::Size mainAxes;
 		float rotAngle;
 		Point center = Point(0, 0);
-		float a = 1 / sqrt(dMat.at<float>(0, 0));
-		float b = 1 / sqrt(dMat.at<float>(0, 1));
-		a *= 1 + eps2;//Scale a and b by eps2
-		b *= 1 + eps2; 
 		if (a > b) {
 			mainAxes.width = a;
 			mainAxes.height = b;
@@ -282,6 +290,8 @@ namespace MVEE {
 		imshow("Final Image", image); // Show our image inside it.
 
 		dMat.release();
+		uMat.release();
+		vMat.release();
 		svdMat.release();
 		tempMat.release();
 	}
@@ -465,9 +475,9 @@ namespace MVEE {
 				jumpX = -1;
 			if (jumpX == 0 && (dx > 0))
 				jumpX = 1;
-			if (jumpY == 0 && (dx < 0))
+			if (jumpY == 0 && (dy < 0))
 				jumpY = -1;
-			if (jumpY == 0 && (dx > 0))
+			if (jumpY == 0 && (dy > 0))
 				jumpY = 1;
 
 			if (this->inShape(0)) {
@@ -1028,9 +1038,7 @@ namespace MVEE {
 	//Checks if a point is inside the image bounderies
 	bool imgCrawler::checkPointLegal(Point p)
 	{
-		if (this->debug) {
-			this->debugCounter++;
-		}
+			this->pixelCounter++;
 
 		if (p.x <= 0 || p.y <= 0 ||
 			p.x > this->image.cols || p.y > this->image.rows)
@@ -1244,6 +1252,7 @@ namespace MVEE {
 
 	//Prints current state - for debugging
 	void imgCrawler::printState() {
+		std::cout << "Total pixels exemined:" << this->pixelCounter << std::endl;
 		std::cout << "Starting Location:" << this->startingLoc << std::endl;
 		std::cout << "Current Location:" << this->currLoc << std::endl;
 		std::cout << "Temp Location:" << this->tempLoc << std::endl;

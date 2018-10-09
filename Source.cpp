@@ -73,9 +73,9 @@ int main(int argc, char** argv)
 		imgCrwl.setDebug(true);
 	imgCrwl.run(color, eps1, eps2,timeLimit);
 	imgCrwl.test();
-	imgCrwl.printState();
 	endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-	std::cout << "Ended at "<< endTime<<" After delta " <<endTime - startTime<< std::endl;
+	std::cout << "Ended at "<< endTime<<" after " <<endTime - startTime<< "ms"<< std::endl;
+	imgCrwl.printState();
 	waitKey(0); // Wait for a keystroke in the window
 	return 0;
 }

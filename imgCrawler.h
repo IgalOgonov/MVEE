@@ -42,7 +42,7 @@ namespace MVEE {
 		Point* p;			//Dynamic array of points
 		float* u;			//Dynamic array of point weights
 		bool debug;			//Debug mode active.
-		int debugCounter;	//Used for debugging
+		int pixelCounter;	//Used for debugging
 		int pointArrSize;	//Just to make it easier to keep track of P's size
 		int pointArrCounter;//Keeps track of our current number of elements in p
 		int color;			//Current color
