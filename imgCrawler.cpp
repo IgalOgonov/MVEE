@@ -15,8 +15,8 @@ namespace MVEE {
 		this->pointArrSize = 4;
 		this->pointArrCounter = 0;
 		this->pixelCounter = 0;
-														/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
-														this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
+		/*this->approxAngleLimit = approxAngleLimit;		//Set approximation limit
+		this->approxArray = new int[approxAngleLimit];	//initialize ApproxArray based on said limit'*/
 		this->p = new Point[this->pointArrSize];
 		this->u = new float[this->pointArrSize];
 	}
@@ -41,10 +41,10 @@ namespace MVEE {
 		double dx = x2 - x1;
 		double dy = y2 - y1;
 		//Calculate angle
-		if (dy != 0 && dx !=0 ) {
+		if (dy != 0 && dx != 0) {
 			this->movementAngle = atan(dy / dx) * 180 / PI;
 			if (dx < 0) {						//Remember - angle is mirrored vertically due to image representation
-				this->movementAngle < 0 ? this->movementAngle = (180+this->movementAngle)*(-1): this->movementAngle = (180 - this->movementAngle);	//Correct the resaults depending on the quardrant
+				this->movementAngle < 0 ? this->movementAngle = (180 + this->movementAngle)*(-1) : this->movementAngle = (180 - this->movementAngle);	//Correct the resaults depending on the quardrant
 			}
 		}
 		else if (dx == 0 && dy != 0) {
@@ -109,11 +109,11 @@ namespace MVEE {
 		//Remember to destroy windows on debug
 		if (this->debug)
 			cv::destroyAllWindows();
-		
+
 		//Now we should have our 4 initial points, and can run the 2nd part of the algorithm
 		double tempAngles[4];											//Find 4 possible angles
 		Point tempPoints[4];											//4 possible points
-		std::vector<float> oldU(this->pointArrCounter,8);				//The old u vector - allocate extra space
+		std::vector<float> oldU(this->pointArrCounter, 8);				//The old u vector - allocate extra space
 		cv::Mat svdMat;													//Svd each time
 		cv::Mat vMat;
 		cv::Mat dMat;
@@ -132,7 +132,7 @@ namespace MVEE {
 			tempAngles[0] = atan2(svdMat.at<float>(0, 1), svdMat.at<float>(0, 0)) * 180 / PI;					//Radians begone!
 			tempAngles[1] = atan2(svdMat.at<float>(1, 1), svdMat.at<float>(1, 0)) * 180 / PI;
 			tempAngles[2] = (tempAngles[0] + 180);
-			if(tempAngles[2] > 180)
+			if (tempAngles[2] > 180)
 				tempAngles[2] -= 360;
 			tempAngles[3] = (tempAngles[1] + 180);
 			if (tempAngles[3] > 180)
@@ -140,7 +140,7 @@ namespace MVEE {
 
 			//Crawl in each direction, and find the farathest point
 			if (this->debug) {							//DEBUG
-				std::cout << "Finding farthest point, angles: " << tempAngles[0] << "," << tempAngles[1] << ","  << tempAngles[2] << "," << tempAngles[3] << std::endl;
+				std::cout << "Finding farthest point, angles: " << tempAngles[0] << "," << tempAngles[1] << "," << tempAngles[2] << "," << tempAngles[3] << std::endl;
 				this->image.copyTo(tempMat);
 				tempMat.at<uchar>(this->startingLoc) = 255;
 			}
@@ -153,7 +153,7 @@ namespace MVEE {
 					break;
 				}
 				//Try to crawl to the farthest corner
-				if (!this->crawlToCorner(tempMat,true)) {
+				if (!this->crawlToCorner(tempMat, true)) {
 					goOn = false;
 					break;
 				}
@@ -188,7 +188,7 @@ namespace MVEE {
 				std::cout << "Farthest point is " << tempPoints[maxIndex] << ", with distance " << maxDist << std::endl;
 				waitKey(0);					// Wait for a keystroke in the window - to close 4 windows
 			}
-			
+
 			//Time to update the points/weights
 			float beta = (maxDist - 3) / ((3) * (maxDist - 1));
 			if (maxDist < 0)
@@ -198,7 +198,7 @@ namespace MVEE {
 				//Update existing weights
 				for (int i = 0; i < this->pointArrCounter; i++) {
 					oldU[i] = this->u[i];
-					this->u[i] *= (1-beta);
+					this->u[i] *= (1 - beta);
 					if (this->p[i].x == tempPoints[maxIndex].x && this->p[i].y == tempPoints[maxIndex].y)
 						existingIndex = i;				//Checks if the current corner point happens to be the max distance point we found
 				}
@@ -224,10 +224,10 @@ namespace MVEE {
 			//Check if the distance between the old and current u is smaller than eps2. If it is, exit
 			float delta = 0;
 			for (int i = 0; i < this->pointArrCounter; i++) {
-				delta += pow((this->u[i]-oldU[i]),2);
-			}			
+				delta += pow((this->u[i] - oldU[i]), 2);
+			}
 			delta = sqrt(delta);
-			
+
 			if (this->debug)
 				std::cout << "Delta is " << delta << ", epsilon is " << eps2 << std::endl;
 
@@ -252,7 +252,7 @@ namespace MVEE {
 		this->calcQ();
 
 		//Scale Q by eps2 until the farthest point we found so far is inside the ellipse
-		dMat = cv::Mat::zeros(2,2,CV_32F);
+		dMat = cv::Mat::zeros(2, 2, CV_32F);
 		dMat.at<float>(0, 0) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 0);
 		dMat.at<float>(1, 1) = cv::SVD(this->Q, SVD::FULL_UV).w.at<float>(0, 1);
 		vMat = cv::SVD(this->Q, SVD::FULL_UV).vt;
@@ -278,10 +278,10 @@ namespace MVEE {
 		else {
 			mainAxes.width = b;
 			mainAxes.height = a;
-		} 
-		(a < b) ? 
+		}
+		(a < b) ?
 			rotAngle = atan2(vMat.at<float>(1, 1), vMat.at<float>(1, 0)) * 180 / PI :
-			rotAngle = atan2(vMat.at<float>(0, 1), vMat.at<float>(0, 0)) * 180 / PI ;
+			rotAngle = atan2(vMat.at<float>(0, 1), vMat.at<float>(0, 0)) * 180 / PI;
 
 
 		for (int i = 0; i < this->pointArrCounter; i++) {
@@ -290,15 +290,15 @@ namespace MVEE {
 		}
 
 		if (this->debug) {
-			std::cout << "Center:" << center << ", rotAngle: " << rotAngle << ", cvSize "<< a <<"x"<<b<<"|" <<mainAxes.width<< "x"<< mainAxes.height << std::endl;
+			std::cout << "Center:" << center << ", rotAngle: " << rotAngle << ", cvSize " << a << "x" << b << "|" << mainAxes.width << "x" << mainAxes.height << std::endl;
 		}
 		//cv::ellipse(this->image, center, mainAxes, rotAngle, 0, 360,100,1);
 		this->slowEllipseDraw();
 		cv::namedWindow("Final Image", WINDOW_NORMAL); // Create a window for display.
 		imshow("Final Image", this->image); // Show our image inside it.
-		if(this->debug)
+		if (this->debug)
 			for (int i = 0; i < this->pointArrCounter; i++) {
-				std::cout << "Distance of point " << this->p[i] << " is " << this->ellipseDist(this->p[i]) <<std::endl;
+				std::cout << "Distance of point " << this->p[i] << " is " << this->ellipseDist(this->p[i]) << std::endl;
 			}
 		dMat.release();
 		uMat.release();
@@ -345,9 +345,9 @@ namespace MVEE {
 		else if (delta < eps)						//If we reached our limit, exit
 			return false;
 		else {
-			if(!col){
+			if (!col) {
 				return this->findStartPointInLine(color, eps, x - delta, y, delta, col) == false ||
-				this->findStartPointInLine(color, eps, x + delta, y, delta, col) == false;
+					this->findStartPointInLine(color, eps, x + delta, y, delta, col) == false;
 			}
 			else {
 				return this->findStartPointInLine(color, eps, x, y - delta, delta, col) == false ||
@@ -373,7 +373,7 @@ namespace MVEE {
 		else if (this->startingLoc.x != 0)			//if startingLoc.x isn't 0, it must mean y isn't either, so they were modified
 			return true;
 
-		else{
+		else {
 			return findStartPointByQuadrats(color, eps, x + deltaX, y + deltaY, deltaX, deltaY) ||
 				findStartPointByQuadrats(color, eps, x + deltaX, y - deltaY, deltaX, deltaY) ||
 				findStartPointByQuadrats(color, eps, x - deltaX, y + deltaY, deltaX, deltaY) ||
@@ -388,7 +388,7 @@ namespace MVEE {
 		String tempStr = "";						//^
 		float* tempArr;								//^
 		if (this->debug) {							//DEBUG
-			std::cout << "Finding corner " << num << " at angle " <<this->getAngleData(false) << std::endl;
+			std::cout << "Finding corner " << num << " at angle " << this->getAngleData(false) << std::endl;
 			this->image.copyTo(tempMat);
 			tempMat.at<uchar>(this->startingLoc) = 255;
 		}
@@ -397,7 +397,7 @@ namespace MVEE {
 		if (!this->jumpToBorder(tempMat)) {
 			return false;
 		}
-		
+
 		//Try to crawl to the farthest corner
 		if (!this->crawlToCorner(tempMat)) {
 			res = false;
@@ -423,12 +423,12 @@ namespace MVEE {
 			}
 			res = true;
 		}
-		
+
 		tempMat.release();
 		return res;
 	}
 
-	bool imgCrawler::jumpToBorder(Mat tempMat, bool ellipseBorder)
+	bool imgCrawler::jumpToBorder(Mat tempMat)
 	{
 		int bhop = 1;								//This is how much we "hop" each time
 		Point prevP;
@@ -442,8 +442,7 @@ namespace MVEE {
 		this->currLoc = this->startingLoc;
 
 		//Hop in big jumps, increasing x2 every time, until you leave the shape
-		bool keepJumping = true;
-		while (keepJumping) {
+		while (this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2)) {
 			prevP.x = this->currLoc.x;
 			prevP.y = this->currLoc.y;
 
@@ -473,17 +472,12 @@ namespace MVEE {
 			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 190;
 			}
-
-			if (ellipseBorder)
-				keepJumping = this->ellipseDist(this->currLoc) < 3;
-			else
-				keepJumping = this->inShape() && !(this->checkBorderPoint(this->currLoc) && bhop > 2);
 		}
 
 		//Once we leave the shape, return back in with jumps becoming x2 smaller each time
 		while (bhop > 1) {
 			//If we are at the border, we can exit - it will get fixed in the next step anyway.
-			if (this->checkBorderPoint(this->currLoc), ellipseBorder)
+			if (this->checkBorderPoint(this->currLoc))
 				break;
 			bhop /= 2;
 			int jumpX = (int)(bhop*dx);
@@ -534,12 +528,7 @@ namespace MVEE {
 
 		//Because it is possible to end up just outside the border instead of inside, do a small correction
 		int timeout = 100;
-		if (ellipseBorder)
-			keepJumping = (this->ellipseDist(this->currLoc) > 3) && this->checkBorderPoint(this->currLoc,true);
-		else
-			keepJumping = !(this->inShape(0) && this->checkBorderPoint(this->currLoc));
-
-		while (keepJumping) {
+		while (!(this->inShape(0) && this->checkBorderPoint(this->currLoc))) {
 			int jumpX = (int)(bhop*dx);
 			int jumpY = (int)(bhop*dy);
 			if (jumpX == 0 && (dx < 0))
@@ -587,18 +576,16 @@ namespace MVEE {
 			}
 
 			//This means some problem occured
-			bool problem = false;
-			ellipseBorder ? problem = (this->ellipseDist(this->currLoc) > 3) : problem = !this->inShape(0);
-			if (problem) {
+			if (!this->inShape(0)) {
 				timeout -= 1;
 				if (timeout < 1) {
 					if (this->debug) {
-						std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << "dx dy are "<<dx << " " << dy<< std::endl;
-						if (toColor && !ellipseBorder) {
-						String wName = "Corner_debug";
-						cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
-						imshow(wName, tempMat); // Show our image inside it.
-						waitKey(0); // Wait for a keystroke in the window
+						std::cout << "Unexpected error - could not find near pixel in shape. At pixel " << this->currLoc << "dx dy are " << dx << " " << dy << std::endl;
+						if (toColor) {
+							String wName = "Corner_debug";
+							cv::namedWindow(wName, WINDOW_NORMAL); // Create a window for display.
+							imshow(wName, tempMat); // Show our image inside it.
+							waitKey(0); // Wait for a keystroke in the window
 						}
 					}
 					tempMat.release();
@@ -606,14 +593,10 @@ namespace MVEE {
 				}
 			}
 
-			if (this->debug && toColor && !ellipseBorder) {						//DEBUG
+			if (this->debug && toColor) {						//DEBUG
 				tempMat.at<uchar>(this->currLoc) = 145;
 			}
 
-			if (ellipseBorder)
-				keepJumping = (this->ellipseDist(this->currLoc) > 3) && this->checkBorderPoint(this->currLoc, true);
-			else
-				keepJumping = !(this->inShape(0) && this->checkBorderPoint(this->currLoc));
 		}
 
 		//At this point, we are inside the shape
@@ -653,7 +636,7 @@ namespace MVEE {
 		int legalPixels[9] = {};
 		legalPixels[0] = 0;
 		double tempAngle;
-		tempAngle = this->getAngleData(false);																		
+		tempAngle = this->getAngleData(false);
 		if (tempAngle < -135 || tempAngle > -45)
 			legalPixels[1] = 1;
 		else
@@ -757,7 +740,7 @@ namespace MVEE {
 						}
 						//This means we finished the 2nd direction - if the first point is farther than current location, swap them
 						else {
-							if (!elipsDist){
+							if (!elipsDist) {
 								if (this->pointDist(this->currLoc, this->startingLoc) < this->pointDist(tempLoc, this->startingLoc)) {
 									this->currLoc.x = tempLoc.x;
 									this->currLoc.y = tempLoc.y;
@@ -890,7 +873,7 @@ namespace MVEE {
 		this->inShape(side2 + 1) ? diag2 = side2 - 1 : diag2 = side2 + 1;
 		if (diag2 == 0)
 			diag2 = 8;
-		if(this->debug)
+		if (this->debug)
 			std::cout << side1 << "|" << diag1 << "|" << side2 << "|" << diag2 << "|;";
 
 		//Move to each side, and set the temp locations accordingly. 
@@ -953,7 +936,7 @@ namespace MVEE {
 				this->currLoc.x = tempLocA.x;
 				this->currLoc.y = tempLocA.y;
 				if (this->debug) {		//Debug
-					std::cout << ":J@ " << tempLocA  << std::endl;
+					std::cout << ":J@ " << tempLocA << std::endl;
 				}
 				return true;
 			}
@@ -982,7 +965,7 @@ namespace MVEE {
 		}
 		if (this->debug) {		//Debug
 			std::cout << ":Stay." << std::endl;
-			std::cout << "DIni: " << initDist <<", D1: "<<dist1<< ", D2: "<<dist2 <<std::endl;
+			std::cout << "DIni: " << initDist << ", D1: " << dist1 << ", D2: " << dist2 << std::endl;
 		}
 		return false;
 	}
@@ -1002,7 +985,7 @@ namespace MVEE {
 			return false;
 	}
 
-	
+
 	//Checks if the specified location is inside the shape (aka of the same color as current color)
 	bool imgCrawler::moveCurrent(int whereTo)
 	{
@@ -1012,7 +995,7 @@ namespace MVEE {
 			return true;
 		Point pos = this->getPointAt(whereTo);
 		//A point outside of the image bounderies is obviously not part of our object
-		if(!this->checkPointLegal(pos))
+		if (!this->checkPointLegal(pos))
 			return false;
 		//If it is, move there
 		else {
@@ -1020,7 +1003,7 @@ namespace MVEE {
 			this->currLoc.y = pos.y;
 			return true;
 		}
-			
+
 
 	}
 
@@ -1034,31 +1017,31 @@ namespace MVEE {
 			pos = start;
 		switch (whereTo) {
 		case POS_N:
-			 pos = Point(pos.x, pos.y + 1);
+			pos = Point(pos.x, pos.y + 1);
 			break;
 		case POS_NE:
-			 pos = Point(pos.x + 1, pos.y + 1);
+			pos = Point(pos.x + 1, pos.y + 1);
 			break;
 		case POS_E:
-			 pos = Point(pos.x + 1, pos.y);
+			pos = Point(pos.x + 1, pos.y);
 			break;
 		case POS_SE:
-			 pos = Point(pos.x + 1, pos.y - 1);
+			pos = Point(pos.x + 1, pos.y - 1);
 			break;
 		case POS_S:
-			 pos = Point(pos.x, pos.y - 1);
+			pos = Point(pos.x, pos.y - 1);
 			break;
 		case POS_SW:
-			 pos = Point(pos.x - 1, pos.y - 1);
+			pos = Point(pos.x - 1, pos.y - 1);
 			break;
 		case POS_W:
-			 pos = Point(pos.x - 1, pos.y);
+			pos = Point(pos.x - 1, pos.y);
 			break;
 		case POS_NW:
-			 pos = Point(pos.x - 1, pos.y + 1);
+			pos = Point(pos.x - 1, pos.y + 1);
 			break;
 		default:
-			 pos = Point(pos.x, pos.y);
+			pos = Point(pos.x, pos.y);
 		}
 		return pos;
 	}
@@ -1066,7 +1049,7 @@ namespace MVEE {
 	//Checks if a point is inside the image bounderies
 	bool imgCrawler::checkPointLegal(Point p)
 	{
-			this->pixelCounter++;
+		this->pixelCounter++;
 
 		if (p.x <= 0 || p.y <= 0 ||
 			p.x > this->image.cols || p.y > this->image.rows)
@@ -1074,6 +1057,7 @@ namespace MVEE {
 		else
 			return true;
 	}
+
 	//Returns true if a point is a border point - aka one of its neighboring pixels is of a different color.
 	bool imgCrawler::checkBorderPoint(Point p, bool ellipse)
 	{
@@ -1081,9 +1065,9 @@ namespace MVEE {
 		if (p.x < 0 || p.y < 0)
 			return false;
 		bool res = false;
-		bool expectedRes;																		
+		bool expectedRes;
 		//False if selected point is inside the shape, true otherwise.
-		if(!ellipse)
+		if (!ellipse)
 			this->image.at<uchar>(p) == this->color ? expectedRes = false : expectedRes = true;
 		else
 			this->ellipseDist(p) < 3 ? expectedRes = false : expectedRes = true;
@@ -1096,7 +1080,7 @@ namespace MVEE {
 				}
 			}
 			else {
-				if (this->ellipseDist(this->getPointAt(i,p)) < 3) {
+				if (this->ellipseDist(this->getPointAt(i, p)) < 3) {
 					if (expectedRes) {
 						res = true;
 						break;
@@ -1116,11 +1100,11 @@ namespace MVEE {
 	//Returns an array of size 9 where the i-th member is 1 if that direction can be in currentAngle's way, 0 otherwise. dirArr[0] is always 0.
 	int * imgCrawler::getAngleDirections(int angle)
 	{
-		int dirArr[9] = {};	
+		int dirArr[9] = {};
 		double tempAngle;
-		(abs(angle)>360)? tempAngle= this->getAngleData(false) : tempAngle = angle;																		//Based on our angle we set members to 1 or 0
-		//Can't do a switch cause it's a double =(
-		//Also, I have to remember the image is mirrored vertically - as such, this should be mirrored as well.
+		(abs(angle)>360) ? tempAngle = this->getAngleData(false) : tempAngle = angle;																		//Based on our angle we set members to 1 or 0
+																																							//Can't do a switch cause it's a double =(
+																																							//Also, I have to remember the image is mirrored vertically - as such, this should be mirrored as well.
 		if (tempAngle < -135 || tempAngle > -45)
 			dirArr[1] = 1;
 		if (tempAngle < 180 && tempAngle > -90)
@@ -1192,16 +1176,16 @@ namespace MVEE {
 			Ui.at<float>(i, i) *= this->u[i];
 		}
 		/*if (debug) {
-			std::cout << "Ui: "<<std::endl;
-			for (int i = 0; i < this->pointArrCounter; i++) {
-				for (int j = 0; j < this->pointArrCounter; j++) {
-					std::cout << Ui.at<float>(i, j);
-					if (j < this->pointArrCounter - 1)
-						std::cout << " ";
-					else
-						std::cout << std::endl;
-				}
-			}
+		std::cout << "Ui: "<<std::endl;
+		for (int i = 0; i < this->pointArrCounter; i++) {
+		for (int j = 0; j < this->pointArrCounter; j++) {
+		std::cout << Ui.at<float>(i, j);
+		if (j < this->pointArrCounter - 1)
+		std::cout << " ";
+		else
+		std::cout << std::endl;
+		}
+		}
 		}*/
 
 		//Make u into a 1x|p| matrix
@@ -1209,13 +1193,13 @@ namespace MVEE {
 			ui.at<float>(i, 0) = this->u[i];
 		}
 		/*if (debug) {
-			std::cout << "u: (";
-			for (int i = 0; i < this->pointArrCounter; i++) {
-				std::cout << ui.at<float>(i, 0);
-				if (i < this->pointArrCounter - 1)
-					std::cout << " ";
-			}
-			std::cout << ")^t" << std::endl;
+		std::cout << "u: (";
+		for (int i = 0; i < this->pointArrCounter; i++) {
+		std::cout << ui.at<float>(i, 0);
+		if (i < this->pointArrCounter - 1)
+		std::cout << " ";
+		}
+		std::cout << ")^t" << std::endl;
 		}*/
 		//Initialize P
 		for (int i = 0; i < this->pointArrCounter; i++) {
@@ -1223,10 +1207,10 @@ namespace MVEE {
 			P.at<float>(1, i) = this->p[i].y;
 		}
 		/*if (debug) {
-			std::cout << "P:"<< std::endl;
-			for (int i = 0; i < this->pointArrCounter; i++) {
-				std::cout << P.at<float>(0, i) << "," << P.at<float>(1, i)<<std::endl;
-			}
+		std::cout << "P:"<< std::endl;
+		for (int i = 0; i < this->pointArrCounter; i++) {
+		std::cout << P.at<float>(0, i) << "," << P.at<float>(1, i)<<std::endl;
+		}
 		}*/
 
 		//Calculate Q according to (28)
@@ -1238,7 +1222,7 @@ namespace MVEE {
 		std::cout << this->Q.at<float>(0, 1) << std::endl;
 		std::cout << this->Q.at<float>(1, 0) << " ";
 		std::cout << this->Q.at<float>(1, 1) << std::endl; */
-		this->Q = this->Q -(P * ui)*((P * ui).t());
+		this->Q = this->Q - (P * ui)*((P * ui).t());
 		/*std::cout << "Q2: " << std::endl;
 		std::cout << this->Q.at<float>(0, 0) << " ";
 		std::cout << this->Q.at<float>(0, 1) << std::endl;
@@ -1319,7 +1303,7 @@ namespace MVEE {
 		std::cout << this->Q.at<float>(0, 1) << std::endl;
 		std::cout << this->Q.at<float>(1, 0) << " ";
 		std::cout << this->Q.at<float>(1, 1) << std::endl;
-	
+
 	}
 
 	//Sets the crawler into debug mode
@@ -1331,14 +1315,14 @@ namespace MVEE {
 	//General testing
 	void imgCrawler::test()
 	{
-		
+
 
 	}
 
 	//For debuging purposes
 	void imgCrawler::drawCross(cv::Mat image, Point p) {
 		image.at<uchar>(p) = 255;
-		image.at<uchar>(this->getPointAt(1,p)) = 25;
+		image.at<uchar>(this->getPointAt(1, p)) = 25;
 		image.at<uchar>(this->getPointAt(3, p)) = 25;
 		image.at<uchar>(this->getPointAt(5, p)) = 25;
 		image.at<uchar>(this->getPointAt(7, p)) = 25;
@@ -1346,72 +1330,85 @@ namespace MVEE {
 
 	//Goes over all pixels in the image.
 	//If a pixel is outside the elipse but one of the pixels near it is inside the ellipse, colors it
-	void imgCrawler::slowEllipseDraw(int color){
-		std::cout << "Drawing Ellipse!"<<std::endl;
+	void imgCrawler::slowEllipseDraw(int color) {
+		std::cout << "Drawing Ellipse!" << std::endl;
 		/*	for (int i = 1; i < this->image.cols; i++) {
-			for (int j = 1; j < this->image.rows; j++) {
-				if (this->checkBorderPoint(Point(i, j), true))
-					this->image.at<uchar>(Point(i, j)) = 100;
-			}
+		for (int j = 1; j < this->image.rows; j++) {
+		if (this->checkBorderPoint(Point(i, j), true))
+		this->image.at<uchar>(Point(i, j)) = 100;
+		}
 		}		*/
 
-
+		//1
 		this->currLoc.x = this->startingLoc.x;
 		this->currLoc.y = this->startingLoc.y;
-		int i = 0;
-		while (i < 4) {
-			while (!this->checkBorderPoint(this->currLoc, true) && this->currLoc.x > 2 && this->currLoc.x < this->image.rows - 2
-				&& this->currLoc.y > 2 && this->currLoc.y < this->image.cols -2) {
-				switch (i) {
-				case 0:
-					this->currLoc.x += 1;
-					break;
-				case 1:
-					this->currLoc.x -= 1;
-					break;
-				case 2:
-					this->currLoc.y += 1;
-					break;
-				case 3:
-					this->currLoc.y -= 1;
-					break;
-				}
-				this->checkBorderPoint(this->currLoc, true) ? i = 5 : i++;
-			}
-			if (i != 5) {
-				this->currLoc.x = this->startingLoc.x;
-				this->currLoc.y = this->startingLoc.y;
-			}
+		while (!this->checkBorderPoint(this->currLoc, true) && (this->currLoc.x < this->image.cols - 2))
+			this->currLoc.x += 1;
+		if (this->checkBorderPoint(this->currLoc, true)) {
+			if (this->debug)
+				std::cout << "Ellipse border point: " << this->currLoc << " with distance " << this->ellipseDist(this->currLoc) << std::endl;
+			this->drawNearbyEllipse(this->currLoc, color);
+			return;
 		}
+		//2
+		this->currLoc.x = this->startingLoc.x;
+		this->currLoc.y = this->startingLoc.y;
+		while (!this->checkBorderPoint(this->currLoc, true) && (this->currLoc.x > 2))
+			this->currLoc.x -= 1;
+		if (this->checkBorderPoint(this->currLoc, true)) {
+			if (this->debug)
+				std::cout << "Ellipse border point: " << this->currLoc << " with distance " << this->ellipseDist(this->currLoc) << std::endl;
+			this->drawNearbyEllipse(this->currLoc, color);
+			return;
+		}
+		//3
+		this->currLoc.x = this->startingLoc.x;
+		this->currLoc.y = this->startingLoc.y;
+		while (!this->checkBorderPoint(this->currLoc, true) && (this->currLoc.y < this->image.rows - 2))
+			this->currLoc.y += 1;
+		if (this->checkBorderPoint(this->currLoc, true)) {
+			if (this->debug)
+				std::cout << "Ellipse border point: " << this->currLoc << " with distance " << this->ellipseDist(this->currLoc) << std::endl;
+			this->drawNearbyEllipse(this->currLoc, color);
+			return;
+		}
+		//4 - forgive me for this mess, I have little time
+		this->currLoc.x = this->startingLoc.x;
+		this->currLoc.y = this->startingLoc.y;
+		while (!this->checkBorderPoint(this->currLoc, true) && (this->currLoc.y > 2))
+			this->currLoc.y -= 1;
+		if (this->checkBorderPoint(this->currLoc, true)) {
+			if (this->debug)
+				std::cout << "Ellipse border point: " << this->currLoc << " with distance " << this->ellipseDist(this->currLoc) << std::endl;
+			this->drawNearbyEllipse(this->currLoc, color);
+			return;
+		}
+
 		//this->jumpToBorder(Mat::zeros(1, 1, CV_32F), true); 
-		if(this->debug)
-			std::cout << "Ellipse border point: " <<this->currLoc<< " with distance "<<this->ellipseDist(this->currLoc)<< std::endl;
-		if(i==5)
-			this->drawNearbyEllipse(this->currLoc,color);		
-			
+
 
 	}
 
 	//Recursively draws nearby border ellipse pixels
-	void imgCrawler::drawNearbyEllipse(Point p, int color){
+	void imgCrawler::drawNearbyEllipse(Point p, int color) {
 		if (this->ellipseDist(p) > 3 &&
 			this->image.at<uchar>(p) != color &&
 			this->checkBorderPoint(p, true))
-		this->image.at<uchar>(p) = color;
+			this->image.at<uchar>(p) = color;
 
 		for (int i = 1; i < 9; i++) {
 			if (this->checkBorderPoint(this->getPointAt(i, p), true) &&
 				this->ellipseDist(this->getPointAt(i, p)) > 3 &&
 				this->image.at<uchar>(this->getPointAt(i, p)) != color)
-			this->drawNearbyEllipse(this->getPointAt(i, p), color);
+				this->drawNearbyEllipse(this->getPointAt(i, p), color);
 		}
 	}
 
 	//Returns an array of the distances of all points near you from the start
 	float * imgCrawler::checkDistNearMe(bool onlyBorder, bool onlyInShape, bool toPrint)
-	{	
+	{
 		float resArr[9] = {};
-		for (int i = 0; i < 9; i++){
+		for (int i = 0; i < 9; i++) {
 			resArr[i] = 1;
 		}
 		for (int i = 0; i < 9; i++) {
@@ -1426,14 +1423,15 @@ namespace MVEE {
 				if (onlyInShape && !this->inShape(i))
 					resArr[i] = 0;
 			}
-			
+
 		}
 		if (toPrint) {
 			String tempStr = "";
-			for (int i = 0; i < 9; i++) {\
-				tempStr += std::to_string(resArr[i]) + " ";
+			for (int i = 0; i < 9; i++) {
+				\
+					tempStr += std::to_string(resArr[i]) + " ";
 			}
-			std::cout <<"Distaces from near "<<this->currLoc<<" to "<<this->startingLoc<<" are "<< tempStr << std::endl;
+			std::cout << "Distaces from near " << this->currLoc << " to " << this->startingLoc << " are " << tempStr << std::endl;
 		}
 
 		return resArr;
